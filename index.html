@@ -2080,8 +2080,7 @@ function renderPwList(){
           <button type="button" class="btn small ghost" data-act="creds">🔑 দেখুন</button>
           ${p['বিবরণ'] ? `<button type="button" class="btn small ghost" data-act="desc">📝 বিবরণ</button>` : ''}
         </div>
-      </div>
-      <button class="del" title="মুছুন">✕</button>`;
+      </div>`;
 
     const linkBtn = row.querySelector('[data-act="link"]');
     if(linkBtn) linkBtn.addEventListener('click', ()=> window.open(p['লিংক'], '_blank'));
@@ -2092,15 +2091,6 @@ function renderPwList(){
     if(descBtn) descBtn.addEventListener('click', ()=>{
       document.getElementById('pwDescBody').textContent = p['বিবরণ']||'';
       document.getElementById('pwDescModal').classList.add('show');
-    });
-
-    row.querySelector('.del').addEventListener('click', async ()=>{
-      try{
-        await apiPost('পাসওয়ার্ড','delete', p['ID']);
-        cache.password = cache.password.filter(x=>x['ID']!==p['ID']);
-        renderPwList();
-        toast('মুছে ফেলা হয়েছে');
-      }catch(err){ toast('মুছতে সমস্যা হয়েছে'); }
     });
 
     list.appendChild(row);
@@ -2135,10 +2125,13 @@ document.getElementById('pwForm').addEventListener('submit', async e=>{
 });
 
 /* ---- master password gate (wired once) ---- */
-function openPwAuth(id){
+let pwPendingAction = 'creds';
+function openPwAuth(id, action){
   pwPendingViewId = id;
+  pwPendingAction = action || 'creds';
   document.getElementById('pwAuthInput').value = '';
   document.getElementById('pwAuthMsg').style.display = 'none';
+  document.getElementById('pwAuthOkBtn').textContent = pwPendingAction==='delete' ? 'মুছুন' : 'দেখুন';
   document.getElementById('pwAuthModal').classList.add('show');
   setTimeout(()=>document.getElementById('pwAuthInput').focus(), 50);
 }
@@ -2148,15 +2141,28 @@ function closePwAuth(){
 }
 document.getElementById('pwAuthCancelBtn').addEventListener('click', closePwAuth);
 document.getElementById('pwAuthInput').addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('pwAuthOkBtn').click(); });
-document.getElementById('pwAuthOkBtn').addEventListener('click', ()=>{
+document.getElementById('pwAuthOkBtn').addEventListener('click', async ()=>{
   const val = document.getElementById('pwAuthInput').value;
   if(val !== PW_MASTER_PASSWORD){
     document.getElementById('pwAuthMsg').style.display = 'block';
     return;
   }
-  const p = cache.password.find(x=>x['ID']===pwPendingViewId);
+  const id = pwPendingViewId;
+  const action = pwPendingAction;
+  const p = cache.password.find(x=>x['ID']===id);
   closePwAuth();
   if(!p) return;
+
+  if(action === 'delete'){
+    try{
+      await apiPost('পাসওয়ার্ড','delete', id);
+      cache.password = cache.password.filter(x=>x['ID']!==id);
+      renderPwList();
+      toast('মুছে ফেলা হয়েছে');
+    }catch(err){ toast('মুছতে সমস্যা হয়েছে'); }
+    return;
+  }
+
   const body = document.getElementById('pwCredsBody');
   body.innerHTML = `
     ${p['ইউজারনেম'] ? `<div><strong>ইউজারনেম:</strong> ${p['ইউজারনেম']}</div>` : ''}
