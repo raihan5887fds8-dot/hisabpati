@@ -1,0 +1,2263 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>আমার হিসাবপাতি</title>
+
+<!-- PWA: installable as a mobile app -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0F2E24">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="হিসাবপাতি">
+<link rel="icon" href="icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icon-192.png">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Tiro+Bangla:ital@0;1&family=Hind+Siliguri:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#1B4332;
+    --ink-deep:#0F2E24;
+    --parchment:#EDEAE0;
+    --parchment-card:#F6F4EC;
+    --rule:#C9BFA8;
+    --gold:#B08D57;
+    --gold-soft:#E4D3AE;
+    --clay:#9C5B4A;
+    --sage:#4C7A5D;
+    --ink-text:#2A2A22;
+    --muted:#7A7566;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--parchment);
+    color:var(--ink-text);
+    font-family:'Hind Siliguri',sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .app{max-width:640px;margin:0 auto;min-height:100vh;background:var(--parchment);position:relative;}
+
+  header{
+    background:linear-gradient(160deg,var(--ink-deep),var(--ink) 70%);
+    color:var(--parchment-card);
+    padding:28px 22px 20px;
+    position:relative;
+    overflow:hidden;
+  }
+  header::before{
+    content:"";
+    position:absolute;inset:0;
+    background-image:
+      radial-gradient(circle at 15% 20%, rgba(176,141,87,.18) 0, transparent 40%),
+      repeating-linear-gradient(45deg, rgba(228,211,174,.05) 0 2px, transparent 2px 22px),
+      repeating-linear-gradient(-45deg, rgba(228,211,174,.05) 0 2px, transparent 2px 22px);
+    pointer-events:none;
+  }
+  header h1{
+    font-family:'Tiro Bangla',serif;
+    font-size:26px;
+    margin:0 0 3px;
+    position:relative;
+    letter-spacing:.3px;
+  }
+  header p{
+    margin:0;
+    font-size:13px;
+    color:var(--gold-soft);
+    position:relative;
+    font-family:'JetBrains Mono',monospace;
+    letter-spacing:.5px;
+  }
+
+  nav.tabs{
+    display:flex;
+    background:var(--ink-deep);
+    padding:0 10px;
+    overflow-x:auto;
+    position:sticky;top:0;z-index:20;
+    box-shadow:0 2px 8px rgba(0,0,0,.15);
+  }
+  nav.tabs button{
+    flex:1 0 auto;
+    background:none;border:none;
+    color:rgba(237,234,224,.55);
+    font-family:'Hind Siliguri',sans-serif;
+    font-weight:600;
+    font-size:14px;
+    padding:14px 10px 12px;
+    cursor:pointer;
+    border-bottom:3px solid transparent;
+    white-space:nowrap;
+    transition:color .15s;
+  }
+  nav.tabs button.active{
+    color:var(--gold-soft);
+    border-bottom-color:var(--gold);
+  }
+
+  main{padding:18px 16px 60px;}
+  .card{
+    background:var(--parchment-card);
+    border:1px solid var(--rule);
+    border-left:4px solid var(--gold);
+    border-radius:6px;
+    padding:16px 16px 14px;
+    margin-bottom:16px;
+    box-shadow:0 1px 3px rgba(0,0,0,.04);
+  }
+  .card h2{
+    font-family:'Tiro Bangla',serif;
+    font-size:18px;
+    margin:0 0 12px;
+    color:var(--ink);
+  }
+  label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px;}
+  input[type=text],input[type=number],input[type=date],input[type=time],input[type=password],select,textarea{
+    width:100%;
+    padding:9px 10px;
+    border:1px solid var(--rule);
+    border-radius:5px;
+    background:#fff;
+    font-family:'Hind Siliguri',sans-serif;
+    font-size:14px;
+    color:var(--ink-text);
+  }
+  input:focus,select:focus,textarea:focus{outline:2px solid var(--gold);outline-offset:1px;}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .btn{
+    display:inline-block;
+    background:var(--ink);
+    color:#fff;
+    border:none;
+    padding:10px 18px;
+    border-radius:5px;
+    font-weight:600;
+    font-size:14px;
+    cursor:pointer;
+    margin-top:12px;
+    font-family:'Hind Siliguri',sans-serif;
+  }
+  .btn:hover{background:var(--ink-deep);}
+  .btn.ghost{background:none;border:1px solid var(--rule);color:var(--ink-text);}
+  .btn.danger{background:var(--clay);}
+  .btn.small{padding:5px 10px;font-size:12px;margin-top:0;}
+  .btn.gold{background:var(--gold);}
+  .btn.full{width:100%;}
+
+  .ledger-row{
+    display:flex;justify-content:space-between;align-items:center;
+    padding:10px 0;
+    border-bottom:1px dashed var(--rule);
+    font-size:14px;
+  }
+  .ledger-row:last-child{border-bottom:none;}
+  .ledger-meta{color:var(--muted);font-size:12px;font-family:'JetBrains Mono',monospace;}
+  .amt{font-family:'JetBrains Mono',monospace;font-weight:600;}
+  .amt.income{color:var(--sage);}
+  .amt.expense{color:var(--clay);}
+  .summary-bar{display:flex;gap:10px;margin-bottom:14px;}
+  .summary-chip{flex:1;text-align:center;padding:10px 6px;border-radius:6px;background:#fff;border:1px solid var(--rule);}
+  .summary-chip .lbl{font-size:11px;color:var(--muted);}
+  .summary-chip .val{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:15px;}
+
+  .header-top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;}
+  .header-left{min-width:0;flex-shrink:0;}
+  .header-notices{display:flex;flex-direction:column;gap:5px;align-items:flex-end;max-width:56%;}
+  .routine-flag{
+    font-size:11px;line-height:1.4;padding:5px 9px;border-radius:10px;
+    text-align:right;font-family:'Hind Siliguri',sans-serif;position:relative;
+  }
+  .routine-flag.today{background:rgba(76,122,93,.28);color:#d9f2e3;border:1px solid var(--sage);}
+  .routine-flag.missed{background:rgba(156,91,74,.3);color:#f7ddd5;border:1px solid var(--clay);}
+
+  .rt-type-btn.active{background:var(--ink);color:#fff;}
+  .rt-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;}
+  .status-pill{font-size:10px;padding:2px 8px;border-radius:9px;font-weight:600;margin-left:6px;}
+  .status-pill.done{background:rgba(76,122,93,.15);color:var(--sage);}
+  .status-pill.skip{background:rgba(156,91,74,.15);color:var(--clay);}
+  .date-task-row{align-items:flex-start;}
+  .reschedule-box{display:flex;flex-direction:column;gap:8px;}
+  .reschedule-box input[type=text]{margin:0;}
+  .postpone-meta{color:var(--gold);}
+
+  table.rt-today-table{width:100%;border-collapse:collapse;font-size:13px;}
+  table.rt-today-table th{
+    background:var(--ink);color:#fff;padding:8px 6px;font-weight:600;text-align:left;font-size:12px;
+  }
+  table.rt-today-table th:first-child{border-radius:5px 0 0 0;}
+  table.rt-today-table th:last-child{border-radius:0 5px 0 0;}
+  table.rt-today-table td{padding:9px 6px;border-bottom:1px solid var(--rule);vertical-align:top;}
+  table.rt-today-table tr:last-child td{border-bottom:none;}
+  table.rt-today-table .badge{font-size:10px;padding:2px 7px;border-radius:8px;background:var(--gold-soft);color:#5a4622;white-space:nowrap;}
+  table.rt-today-table .badge.bd{background:rgba(76,122,93,.15);color:var(--sage);}
+
+  .day-group h3{
+    font-family:'Tiro Bangla',serif;
+    font-size:15px;color:var(--gold);
+    margin:16px 0 6px;
+    border-bottom:1px solid var(--rule);
+    padding-bottom:4px;
+  }
+  .task-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px dashed var(--rule);}
+  .task-row:last-child{border-bottom:none;}
+  .task-row input[type=checkbox]{width:18px;height:18px;accent-color:var(--sage);flex-shrink:0;}
+  .task-row .t{flex:1;}
+  .task-row .time{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted);}
+  .task-row.done .t{text-decoration:line-through;color:var(--muted);}
+  .del{background:none;border:none;color:var(--clay);cursor:pointer;font-size:16px;padding:2px 6px;}
+
+  .switch{position:relative;width:40px;height:22px;flex-shrink:0;}
+  .switch input{opacity:0;width:0;height:0;}
+  .slider{position:absolute;inset:0;background:var(--rule);border-radius:22px;cursor:pointer;transition:.2s;}
+  .slider::before{content:"";position:absolute;height:16px;width:16px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s;}
+  .switch input:checked + .slider{background:var(--sage);}
+  .switch input:checked + .slider::before{transform:translateX(18px);}
+
+  .banner{
+    background:var(--gold-soft);border:1px solid var(--gold);color:var(--ink-deep);
+    padding:12px 14px;border-radius:6px;margin-bottom:14px;font-size:13px;
+  }
+  .empty{color:var(--muted);font-size:13px;text-align:center;padding:16px 0;}
+  .status-msg{font-size:12px;margin-top:8px;}
+  .status-msg.ok{color:var(--sage);}
+  .status-msg.err{color:var(--clay);}
+
+  #toast{
+    position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(10px);
+    background:var(--ink-deep);color:#fff;padding:10px 18px;border-radius:6px;
+    font-size:13px;opacity:0;pointer-events:none;transition:.25s;z-index:100;
+  }
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+  /* ---------- prayer tab ---------- */
+  .islamic-date{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--sage);margin-bottom:4px;}
+  .hijri-date{font-family:'Tiro Bangla',serif;font-size:17px;color:var(--gold);margin-bottom:8px;}
+  .amal-of-day{
+    background:#fff7ed;border:1px dashed var(--gold);border-radius:6px;
+    padding:10px;font-size:13px;color:#7a5a1e;margin-top:8px;
+  }
+  .notice-item{padding:8px 0;border-bottom:1px dashed var(--rule);font-size:13px;}
+  .notice-item:last-child{border-bottom:none;}
+  .notice-sub{color:var(--muted);font-size:12px;margin-top:2px;}
+  .notice-toggle{margin-top:10px;font-size:13px;color:var(--gold);cursor:pointer;font-weight:600;}
+  .more-notices{display:none;margin-top:6px;}
+
+  .qaza-box{display:flex;justify-content:space-between;align-items:center;}
+  .qaza-num{font-family:'JetBrains Mono',monospace;font-size:26px;font-weight:700;color:var(--clay);}
+  .qaza-lbl{font-size:12px;color:var(--muted);}
+
+  .pt-row{
+    display:flex;align-items:center;justify-content:space-between;
+    background:#fff;border:1px solid var(--rule);border-radius:6px;
+    padding:9px 10px;margin-bottom:8px;
+  }
+  .pt-row.active-prayer{border-color:var(--gold);background:linear-gradient(90deg,#fff,var(--gold-soft) 220%);}
+  .pt-name{font-weight:700;color:var(--ink);width:64px;cursor:pointer;}
+  .pt-row.active-prayer .pt-name{color:var(--clay);}
+  .pt-row input[type=time]{width:auto;flex:0 0 auto;padding:5px 6px;font-size:13px;}
+  .pt-count{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted);min-width:96px;text-align:right;}
+  .pt-badge{font-size:12px;font-weight:700;min-width:34px;text-align:center;}
+  .pt-badge.ok{color:var(--sage);}
+  .pt-badge.no{color:var(--clay);}
+
+  .modal{position:fixed;inset:0;background:rgba(15,46,36,.55);display:none;align-items:center;justify-content:center;z-index:200;padding:16px;}
+  .modal.show{display:flex;}
+  .modal-box{background:var(--parchment-card);border-radius:10px;padding:20px;width:100%;max-width:400px;max-height:85vh;overflow-y:auto;}
+  .modal-box h3{font-family:'Tiro Bangla',serif;color:var(--ink);margin:0 0 14px;font-size:19px;text-align:center;}
+  .rakat-row{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px dashed var(--rule);font-size:14px;}
+  .rakat-row:last-child{border-bottom:none;}
+  .r-sunnah{color:var(--sage);}
+  .r-sunnah-light{color:#6b8f6f;}
+  .r-farz{color:var(--clay);font-weight:700;}
+  .r-nafl{color:var(--ink-text);}
+  .r-witr{color:#7a2e20;font-weight:700;}
+
+  table.amal-table{width:100%;border-collapse:collapse;font-size:12px;}
+  table.amal-table th{background:var(--ink);color:#fff;padding:6px 4px;font-weight:600;}
+  table.amal-table td{padding:6px 4px;text-align:center;border-bottom:1px solid var(--rule);}
+  table.amal-table td.dt{font-family:'JetBrains Mono',monospace;text-align:left;font-size:11px;}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="header-top">
+      <div class="header-left">
+        <h1>আমার হিসাবপাতি</h1>
+        <p id="todayLine">খাতা লোড হচ্ছে…</p>
+      </div>
+      <div class="header-notices" id="routineNotices"></div>
+    </div>
+  </header>
+
+  <nav class="tabs" id="tabs">
+    <button data-tab="finance" class="active">হিসাব</button>
+    <button data-tab="prayer">নামাজ</button>
+    <button data-tab="routine">রুটিন</button>
+    <button data-tab="password">পাসওয়ার্ড</button>
+    <button data-tab="settings">সেটিংস</button>
+  </nav>
+
+  <main id="main"></main>
+</div>
+<div id="toast"></div>
+
+<!-- qaza calculator modal -->
+<div class="modal" id="qazaModal">
+  <div class="modal-box">
+    <h3>কাজা নামাজ হিসাব</h3>
+    <div id="qazaStep1">
+      <label>আপনার জন্ম তারিখ</label>
+      <input type="date" id="birthDateInput">
+      <label>কবে থেকে নিয়মিত নামাজ পড়ছেন?</label>
+      <select id="qazaStartOption">
+        <option value="today">আজ থেকে</option>
+        <option value="custom">নির্দিষ্ট তারিখ</option>
+      </select>
+      <div id="qazaCustomWrap" style="display:none">
+        <label>তারিখ</label><input type="date" id="qazaCustomDate">
+      </div>
+      <button class="btn full" id="qazaCalcBtn">হিসাব করুন</button>
+      <div class="status-msg" id="qazaMsg"></div>
+    </div>
+    <div id="qazaStep2" style="display:none;text-align:center;">
+      <p style="font-size:15px;margin-bottom:14px;">আপনার মোট কাজা ফরজ রাকাত: <b id="qazaResultText" style="color:var(--clay)"></b></p>
+      <button class="btn full" id="qazaSaveBtn">সংরক্ষণ করুন</button>
+    </div>
+    <button class="btn ghost full" id="qazaCloseBtn" style="margin-top:8px;">বাতিল</button>
+  </div>
+</div>
+
+<!-- ada (offset) modal -->
+<div class="modal" id="adaModal">
+  <div class="modal-box">
+    <h3>কাজা আদায়</h3>
+    <label>কত রাকাত আদায় করলেন?</label>
+    <input type="number" id="adaInput" min="1">
+    <button class="btn full" id="adaSaveBtn">যোগ করুন</button>
+    <button class="btn ghost full" id="adaCloseBtn" style="margin-top:8px;">বাতিল</button>
+  </div>
+</div>
+
+<!-- rakat checklist modal -->
+<div class="modal" id="rakatModal">
+  <div class="modal-box">
+    <h3 id="rakatModalTitle">নামাজ</h3>
+    <div id="rakatModalBody"></div>
+    <button class="btn full" id="rakatSaveBtn" style="margin-top:12px;">সংরক্ষণ করুন</button>
+    <button class="btn ghost full" id="rakatCloseBtn" style="margin-top:8px;">বন্ধ করুন</button>
+  </div>
+</div>
+
+<!-- generic details modal -->
+<div class="modal" id="detailsModal">
+  <div class="modal-box">
+    <h3 id="detailsTitle">বিস্তারিত</h3>
+    <div id="detailsBody" style="font-size:14px;line-height:1.9;"></div>
+    <button class="btn ghost full" id="detailsCloseBtn" style="margin-top:14px;">বন্ধ করুন</button>
+  </div>
+</div>
+
+<!-- add routine task modal -->
+<div class="modal" id="addRoutineModal">
+  <div class="modal-box">
+    <h3>নতুন কাজ যোগ করুন</h3>
+    <div style="display:flex;gap:8px;margin-bottom:12px;">
+      <button type="button" class="btn small rt-type-btn active" data-type="সাপ্তাহিক">সাপ্তাহিক (প্রতি সপ্তাহে)</button>
+      <button type="button" class="btn small ghost rt-type-btn" data-type="তারিখ">নির্দিষ্ট তারিখে</button>
+    </div>
+    <form id="rtForm">
+      <div id="rtDayWrap"><label>দিন</label>
+        <select name="দিন">
+          <option>রবিবার</option><option>সোমবার</option><option>মঙ্গলবার</option>
+          <option>বুধবার</option><option>বৃহস্পতিবার</option><option>শুক্রবার</option>
+          <option>শনিবার</option>
+        </select>
+      </div>
+      <div id="rtDateWrap" style="display:none"><label>তারিখ</label>
+        <input type="date" name="তারিখ">
+      </div>
+      <label>সময় (ঐচ্ছিক)</label><input type="time" name="সময়">
+      <label>কাজ</label><input type="text" name="কাজ" placeholder="যেমন: কুরআন তিলাওয়াত" required>
+      <button class="btn full" type="submit">যোগ করুন</button>
+    </form>
+    <button class="btn ghost full" id="addRoutineCloseBtn" style="margin-top:8px;">বাতিল</button>
+  </div>
+</div>
+
+<!-- single action-sheet for a "তারিখ ভিত্তিক কাজ" row -->
+<div class="modal" id="rtActionModal">
+  <div class="modal-box">
+    <h3 id="rtActionTitle">কাজ</h3>
+    <div id="rtActionButtons" style="display:flex;flex-direction:column;gap:8px;">
+      <button type="button" class="btn full" data-act="done" style="margin-top:0;">✓ সম্পন্ন</button>
+      <button type="button" class="btn ghost full" data-act="skip" style="margin-top:0;">✕ হবে না</button>
+      <button type="button" class="btn ghost full" data-act="reschedule" style="margin-top:0;">📅 অন্য দিন</button>
+      <button type="button" class="btn ghost full" data-act="delete" style="margin-top:0;color:var(--clay);">🗑 মুছুন</button>
+    </div>
+    <div class="reschedule-box" id="rtActionRescheduleBox" style="display:none;margin-top:10px;">
+      <input type="date" id="rtActionNewDate">
+      <input type="text" id="rtActionNote" placeholder="নোট (ঐচ্ছিক) — কেন পেছাচ্ছেন?">
+      <button type="button" class="btn full" id="rtActionConfirmReschedule" style="margin-top:0;">সংরক্ষণ</button>
+    </div>
+    <button class="btn ghost full" id="rtActionCloseBtn" style="margin-top:14px;">বাতিল</button>
+  </div>
+</div>
+
+<!-- routine history search modal -->
+<div class="modal" id="routineHistoryModal">
+  <div class="modal-box">
+    <h3>রুটিন ইতিহাস</h3>
+    <label>তারিখ বেছে নিন</label>
+    <input type="date" id="rtHistoryDate">
+    <div id="rtHistoryBody" style="margin-top:12px;font-size:13px;line-height:1.7;"></div>
+    <button class="btn ghost full" id="rtHistoryCloseBtn" style="margin-top:14px;">বন্ধ করুন</button>
+  </div>
+</div>
+
+<!-- password manager: master password gate -->
+<div class="modal" id="pwAuthModal">
+  <div class="modal-box">
+    <h3>মাস্টার পাসওয়ার্ড দিন</h3>
+    <input type="password" id="pwAuthInput" placeholder="••••••••">
+    <div class="status-msg err" id="pwAuthMsg" style="display:none;">পাসওয়ার্ড ভুল হয়েছে</div>
+    <div style="display:flex;gap:8px;margin-top:10px;">
+      <button class="btn" id="pwAuthOkBtn" style="margin-top:0;flex:1;">দেখুন</button>
+      <button class="btn ghost" id="pwAuthCancelBtn" style="margin-top:0;flex:1;">বাতিল</button>
+    </div>
+  </div>
+</div>
+
+<!-- password manager: view credentials -->
+<div class="modal" id="pwCredsModal">
+  <div class="modal-box">
+    <h3>লগইন তথ্য</h3>
+    <div id="pwCredsBody" style="font-size:14px;line-height:2;"></div>
+    <button class="btn ghost full" id="pwCredsCloseBtn" style="margin-top:14px;">বন্ধ করুন</button>
+  </div>
+</div>
+
+<!-- password manager: view description -->
+<div class="modal" id="pwDescModal">
+  <div class="modal-box">
+    <h3>বিবরণ</h3>
+    <div id="pwDescBody" style="font-size:14px;line-height:1.7;white-space:pre-wrap;word-break:break-word;"></div>
+    <button class="btn ghost full" id="pwDescCloseBtn" style="margin-top:14px;">বন্ধ করুন</button>
+  </div>
+</div>
+
+<!-- password manager: add new entry -->
+<div class="modal" id="pwAddModal">
+  <div class="modal-box">
+    <h3>➕ নতুন এন্ট্রি যোগ করুন</h3>
+    <form id="pwForm">
+      <label>সাইট / সফটওয়্যারের নাম</label>
+      <input type="text" name="নাম" required>
+
+      <label>ধরন বেছে নিন</label>
+      <select name="ধরন" id="pwType" required onchange="togglePwFormFields()">
+        <option value="">বেছে নিন</option>
+        <option value="সফটওয়্যার">সফটওয়্যার</option>
+        <option value="ওয়েবসাইট">ওয়েবসাইট</option>
+        <option value="ইমেইল">ইমেইল</option>
+      </select>
+
+      <div id="pwLinkBox" style="display:none;">
+        <label>সাইট লিংক</label>
+        <input type="text" name="লিংক">
+      </div>
+
+      <div id="pwUserBox">
+        <label>ইউজারনেম (ঐচ্ছিক)</label>
+        <input type="text" name="ইউজারনেম">
+      </div>
+
+      <label>পাসওয়ার্ড <span style="color:var(--clay)">*</span></label>
+      <div style="position:relative">
+        <input type="password" name="পাসওয়ার্ড" id="pwPassInput" required style="padding-right:56px;">
+        <span onclick="togglePwVisibility()" id="pwToggleLbl" style="position:absolute;right:10px;top:9px;cursor:pointer;font-size:12px;color:var(--gold);font-weight:600;">দেখুন</span>
+      </div>
+
+      <label>বিবরণ (ঐচ্ছিক)</label>
+      <textarea name="বিবরণ" rows="3"></textarea>
+
+      <button class="btn full" type="submit">যোগ করুন</button>
+    </form>
+    <button class="btn ghost full" id="pwAddCloseBtn" style="margin-top:8px;">বাতিল</button>
+  </div>
+</div>
+
+<script>
+const DAY_NAMES = ['রবিবার','সোমবার','মঙ্গলবার','বুধবার','বৃহস্পতিবার','শুক্রবার','শনিবার'];
+const MONTHS = ['জানুয়ারি','ফেব্রুয়ারি','মার্চ','এপ্রিল','মে','জুন','জুলাই','আগস্ট','সেপ্টেম্বর','অক্টোবর','নভেম্বর','ডিসেম্বর'];
+const HIJRI_MONTHS = ['মহররম','সফর','রবিউল আউয়াল','রবিউস সানি','জমাদিউল আউয়াল','জমাদিউস সানি','রজব','শাবান','রমজান','শাওয়াল','জিলকদ','জিলহজ্জ'];
+const BN_DIGIT = {'0':'০','1':'১','2':'২','3':'৩','4':'৪','5':'৫','6':'৬','7':'৭','8':'৮','9':'৯'};
+function toBn(n){ return String(n).replace(/[0-9]/g, d=>BN_DIGIT[d]); }
+
+const PRAYERS = ['ফজর','যোহর','আসর','মাগরিব','এশা'];
+const PRAYER_DETAILS = {
+  'ফজর': [
+    {text:'২ রাকাত তাহিয়্যাতুল মসজিদ', cls:'r-nafl', rakat:2},
+    {text:'২ রাকাত সুন্নত', cls:'r-sunnah', rakat:2},
+    {text:'২ রাকাত ফরজ', cls:'r-farz', rakat:2}
+  ],
+  'যোহর': [
+    {text:'২ রাকাত তাহিয়্যাতুল মসজিদ', cls:'r-nafl', rakat:2},
+    {text:'৪ রাকাত সুন্নত', cls:'r-sunnah', rakat:4},
+    {text:'৪ রাকাত ফরজ', cls:'r-farz', rakat:4},
+    {text:'২ রাকাত সুন্নত', cls:'r-sunnah', rakat:2},
+    {text:'২ রাকাত নফল', cls:'r-nafl', rakat:2}
+  ],
+  'আসর': [
+    {text:'২ রাকাত তাহিয়্যাতুল মসজিদ', cls:'r-nafl', rakat:2},
+    {text:'৪ রাকাত সুন্নত (গায়রে মুআক্কাদা)', cls:'r-sunnah-light', rakat:4},
+    {text:'৪ রাকাত ফরজ', cls:'r-farz', rakat:4}
+  ],
+  'মাগরিব': [
+    {text:'২ রাকাত তাহিয়্যাতুল মসজিদ', cls:'r-nafl', rakat:2},
+    {text:'৩ রাকাত ফরজ', cls:'r-farz', rakat:3},
+    {text:'২ রাকাত সুন্নত', cls:'r-sunnah', rakat:2},
+    {text:'২ রাকাত নফল', cls:'r-nafl', rakat:2}
+  ],
+  'এশা': [
+    {text:'২ রাকাত তাহিয়্যাতুল মসজিদ', cls:'r-nafl', rakat:2},
+    {text:'৪ রাকাত সুন্নত (গায়রে মুআক্কাদা)', cls:'r-sunnah-light', rakat:4},
+    {text:'৪ রাকাত ফরজ', cls:'r-farz', rakat:4},
+    {text:'২ রাকাত সুন্নত', cls:'r-sunnah', rakat:2},
+    {text:'২ রাকাত নফল', cls:'r-nafl', rakat:2},
+    {text:'৩ রাকাত বিতর', cls:'r-witr', rakat:3},
+    {text:'২ রাকাত নফল', cls:'r-nafl', rakat:2}
+  ]
+};
+const ISLAMIC_EVENTS = [
+  {month:1, day:1, title:'হিজরি নববর্ষ'},
+  {month:1, day:10, title:'আশুরা'},
+  {month:3, day:12, title:'ঈদে মিলাদুন্নবী (সা.)'},
+  {month:7, day:27, title:'শবে মেরাজ'},
+  {month:8, day:15, title:'শবে বরাত'},
+  {month:9, day:1, title:'রমজান শুরু'},
+  {month:9, day:27, title:'শবে কদর'},
+  {month:10, day:1, title:'ঈদুল ফিতর'},
+  {month:12, day:9, title:'আরাফার দিন'},
+  {month:12, day:10, title:'ঈদুল আজহা'}
+];
+const DAILY_AMAL = [
+  {month:1, day:1, text:'আজ হিজরি নববর্ষ'},
+  {month:1, day:10, text:'আশুরা — রোজা রাখা মুস্তাহাব'},
+  {month:3, day:12, text:'ঈদে মিলাদুন্নবী — বেশি বেশি দরুদ পড়ুন'},
+  {month:7, day:27, text:'শবে মেরাজ — নফল নামাজ ও দোয়া করুন'},
+  {month:8, day:15, text:'শবে বরাত — নফল ইবাদত করুন'},
+  {month:9, day:1, text:'রমজান শুরু — রোজা ও তারাবীহ'},
+  {month:9, day:27, text:'শবে কদর — হাজার মাসের চেয়ে উত্তম রাত'},
+  {month:10, day:1, text:'ঈদুল ফিতর মোবারক'},
+  {month:12, day:9, text:'আরাফার দিন — রোজা অত্যন্ত ফজিলতপূর্ণ'},
+  {month:12, day:10, text:'ঈদুল আজহা মোবারক'}
+];
+
+let API_URL = null;
+let cache = { finance: [], prayer: [], routine: [], routineLog: [], password: [], qaza: [], ledger: [], cash: [] };
+let hijriInfo = null;
+let islamicNoticesHtml = { main:'', more:'' };
+let dailyAmalHtml = '';
+let prayerTimes = { 'ফজর':'05:00','যোহর':'12:30','আসর':'16:00','মাগরিব':'18:15','এশা':'19:45' };
+let currentRakatPrayer = null;
+let testDateOverride = null; // 'YYYY-MM-DD' হলে পুরো অ্যাপ এটাকেই "আজ" ধরে কাজ করবে (শুধু টেস্টের জন্য)
+
+/* Google Sheets sometimes silently converts a typed "HH:MM" or "YYYY-MM-DD" value
+   into a real Date cell. When that comes back through the API as JSON, Date objects
+   turn into full ISO strings (e.g. "1899-12-29T22:36:40.000Z" for a time-only value).
+   These helpers detect that and convert it back into the plain value we actually want. */
+function normalizeTimeVal(v){
+  if(v===null || v===undefined || v==='') return v;
+  if(typeof v==='string'){
+    const m = v.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
+    if(m){
+      const d = new Date(v);
+      if(!isNaN(d)) return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+    }
+  }
+  return v;
+}
+function normalizeDateVal(v){
+  if(v===null || v===undefined || v==='') return v;
+  if(typeof v==='string'){
+    const m = v.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
+    if(m){
+      const d = new Date(v);
+      if(!isNaN(d)) return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+    }
+  }
+  return v;
+}
+function sanitizeSheetRow(obj){
+  Object.keys(obj).forEach(k=>{
+    if(k==='সময়') obj[k] = normalizeTimeVal(obj[k]);
+    else if(k.indexOf('তারিখ')!==-1) obj[k] = normalizeDateVal(obj[k]);
+  });
+  return obj;
+}
+
+function todayStr(d){
+  if(!d){
+    d = testDateOverride ? new Date(testDateOverride+'T00:00:00') : new Date();
+  }
+  return d.toISOString().slice(0,10);
+}
+
+function updateHeaderLine(){
+  const el = document.getElementById('todayLine');
+  if(testDateOverride){
+    const d = new Date(testDateOverride+'T00:00:00');
+    el.textContent = '🧪 টেস্ট তারিখ: ' + todayStr() + ' · ' + DAY_NAMES[d.getDay()];
+  } else {
+    el.textContent = todayStr() + ' · ' + DAY_NAMES[new Date().getDay()];
+  }
+  renderRoutineNotices();
+}
+
+/* ---- date-based routine notices shown top-right in the header ---- */
+function daysAgo(dateStr){
+  const a = new Date(dateStr+'T00:00:00');
+  const b = new Date(todayStr()+'T00:00:00');
+  return Math.round((b-a)/86400000);
+}
+function getShortDateLabel(dateStr){
+  const parts = (dateStr||'').split('-').map(Number);
+  if(parts.length!==3 || !parts[1]) return dateStr||'';
+  return toBn(parts[2]) + ' ' + (MONTHS[parts[1]-1]||'');
+}
+function getDateRoutineNotices(){
+  const today = todayStr();
+  return (cache.routine||[])
+    .filter(r=> r['ধরন']==='তারিখ' && r['স্ট্যাটাস']==='বাকি' && r['তারিখ'] && r['তারিখ']<=today)
+    .sort((a,b)=> a['তারিখ'].localeCompare(b['তারিখ']));
+}
+function renderRoutineNotices(){
+  const wrap = document.getElementById('routineNotices');
+  if(!wrap) return;
+  const today = todayStr();
+  const items = getDateRoutineNotices();
+  wrap.innerHTML = items.map(r=>{
+    if(r['তারিখ']===today){
+      return `<div class="routine-flag today">🔔 ${r['কাজ']||''}</div>`;
+    }
+    const diff = daysAgo(r['তারিখ']);
+    const label = diff===1 ? 'গতকাল' : ('গত ' + getShortDateLabel(r['তারিখ']));
+    return `<div class="routine-flag missed">⚠️ ${label} "${r['কাজ']||''}" করেননি</div>`;
+  }).join('');
+}
+
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 2200);
+}
+
+/* ---------- storage abstraction: works inside Claude and standalone ---------- */
+const hasClaudeStorage = (typeof window.storage !== 'undefined' && window.storage && typeof window.storage.get === 'function');
+async function localGet(key, fallback){
+  try{
+    if(hasClaudeStorage){
+      const r = await window.storage.get('local:'+key, false);
+      return r ? JSON.parse(r.value) : fallback;
+    } else {
+      const v = localStorage.getItem('hisheb_'+key);
+      return v ? JSON.parse(v) : fallback;
+    }
+  }catch(e){ return fallback; }
+}
+async function localSet(key, value){
+  try{
+    if(hasClaudeStorage){
+      await window.storage.set('local:'+key, JSON.stringify(value), false);
+    } else {
+      localStorage.setItem('hisheb_'+key, JSON.stringify(value));
+    }
+  }catch(e){}
+}
+
+async function loadConfig(){
+  const url = await localGet('apiUrl', null);
+  API_URL = url;
+}
+async function saveConfig(url){
+  await localSet('apiUrl', url);
+  API_URL = url;
+}
+
+async function apiGet(sheet){
+  if(!API_URL) throw new Error('URL সেট করা হয়নি');
+  let res;
+  try{ res = await fetch(API_URL + '?sheet=' + encodeURIComponent(sheet)); }
+  catch(e){ throw new Error('সংযোগ ব্যর্থ (ইন্টারনেট/URL চেক করুন)'); }
+  let json;
+  try{ json = await res.json(); }
+  catch(e){ throw new Error('সার্ভার থেকে সঠিক উত্তর আসেনি — Apps Script "Anyone" এক্সেসে Deploy হয়েছে কিনা চেক করুন'); }
+  if(json.status !== 'ok') throw new Error(json.message || 'অজানা সমস্যা');
+  return json.data;
+}
+async function apiPost(sheet, action, id, data){
+  if(!API_URL) throw new Error('URL সেট করা হয়নি');
+  let res;
+  try{
+    res = await fetch(API_URL, {
+      method: 'POST',
+      headers: {'Content-Type':'text/plain;charset=utf-8'},
+      body: JSON.stringify({sheet, action, id, data})
+    });
+  }catch(e){ throw new Error('সংযোগ ব্যর্থ (ইন্টারনেট/URL চেক করুন)'); }
+  let json;
+  try{ json = await res.json(); }
+  catch(e){ throw new Error('সার্ভার থেকে সঠিক উত্তর আসেনি — Apps Script "Anyone" এক্সেসে Deploy হয়েছে কিনা চেক করুন'); }
+  if(json.status !== 'ok') throw new Error(json.message || 'অজানা সমস্যা');
+  return json;
+}
+
+async function refreshAll(){
+  if(!API_URL) return;
+  const sheets = ['হিসাব','নামাজ','রুটিন','রুটিন_লগ','পাসওয়ার্ড','কাজা','লেনদেন','ক্যাশ'];
+  const keys = ['finance','prayer','routine','routineLog','password','qaza','ledger','cash'];
+  const results = await Promise.allSettled(sheets.map(s=>apiGet(s)));
+  let anyFail = false;
+  results.forEach((r,i)=>{
+    if(r.status==='fulfilled'){ cache[keys[i]] = r.value.map(sanitizeSheetRow); }
+    else { anyFail = true; console.error(sheets[i], r.reason); }
+  });
+  if(anyFail){
+    toast('কিছু ডাটা লোড হয়নি — Code.gs আপডেট করে আবার Deploy করেছেন কিনা চেক করুন');
+  }
+}
+
+/* ---------------- TAB RENDER ---------------- */
+const main = document.getElementById('main');
+let activeTab = 'finance';
+
+function setTab(tab){
+  activeTab = tab;
+  document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.toggle('active', b.dataset.tab===tab));
+  render();
+}
+document.getElementById('tabs').addEventListener('click', e=>{
+  if(e.target.tagName==='BUTTON') setTab(e.target.dataset.tab);
+});
+
+function render(){
+  if(!API_URL && activeTab!=='settings'){
+    main.innerHTML = `<div class="banner">শুরু করতে আগে <b>সেটিংস</b> ট্যাবে গিয়ে আপনার Google Apps Script Web App URL বসান।</div>`;
+    return;
+  }
+  if(activeTab==='finance') renderFinance();
+  else if(activeTab==='prayer') renderPrayer();
+  else if(activeTab==='routine') renderRoutine();
+  else if(activeTab==='password') renderPassword();
+  else if(activeTab==='settings') renderSettings();
+}
+
+/* ---------------- FINANCE ---------------- */
+function computePersonBalances(){
+  const balances = {};
+  cache.ledger.forEach(r=>{
+    const name = (r['নাম']||'').trim(); if(!name) return;
+    const amt = Number(r['পরিমাণ'])||0;
+    const sign = (r['লেনদেন']==='বৃদ্ধি') ? 1 : -1;
+    const dir = (r['ধরন']==='দেনাদার') ? 1 : -1;
+    balances[name] = (balances[name]||0) + sign*dir*amt;
+  });
+  return balances;
+}
+function fmtAmt(n){ return (Math.round(n*100)/100).toString(); }
+
+function getCashTotal(){
+  return cache.cash[0] ? Number(cache.cash[0]['পরিমাণ'])||0 : 0;
+}
+async function setCashTotal(total){
+  if(cache.cash[0]){
+    await apiPost('ক্যাশ','update', cache.cash[0]['ID'], {'পরিমাণ': total});
+    cache.cash[0]['পরিমাণ'] = total;
+  } else {
+    const res = await apiPost('ক্যাশ','add', null, {'পরিমাণ': total});
+    cache.cash = [{ID:res.id, 'পরিমাণ': total}];
+  }
+}
+function cashDeltaForFinance(type, amount){
+  if(type==='আয়') return amount;
+  if(type==='খরচ') return -amount;
+  return 0;
+}
+function cashDeltaForLedger(dhoron, lenden, amount){
+  if(dhoron==='দেনাদার') return lenden==='বৃদ্ধি' ? -amount : amount;
+  if(dhoron==='পাওনাদার') return lenden==='বৃদ্ধি' ? amount : -amount;
+  return 0;
+}
+
+function showReceivableList(){
+  const balances = computePersonBalances();
+  const receivable = Object.entries(balances).filter(([,b])=>b>0.005).sort((a,b)=>b[1]-a[1]);
+  const row = (n,b) => `
+    <div class="ledger-row">
+      <span class="person-name" data-name="${n}" style="cursor:pointer">${n}</span>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span class="amt income">৳${fmtAmt(b)}</span>
+        <button class="btn small settle-recv" data-name="${n}" data-bal="${b}">গ্রহণ করলাম</button>
+      </div>
+    </div>`;
+  const html = receivable.length ? receivable.map(([n,b])=>row(n,b)).join('') : '<div class="empty">কোনো দেনাদার নেই</div>';
+  document.getElementById('detailsTitle').textContent = 'দেনাদার (আপনি পাবেন)';
+  document.getElementById('detailsBody').innerHTML = html;
+  document.getElementById('detailsModal').classList.add('show');
+  document.querySelectorAll('#detailsBody .person-name').forEach(el=>el.addEventListener('click', ()=>showPersonHistory(el.dataset.name)));
+  document.querySelectorAll('#detailsBody .settle-recv').forEach(el=>el.addEventListener('click', ()=>settleReceivable(el.dataset.name, Number(el.dataset.bal))));
+}
+function showPayableList(){
+  const balances = computePersonBalances();
+  const payable = Object.entries(balances).filter(([,b])=>b<-0.005).sort((a,b)=>a[1]-b[1]);
+  const row = (n,b) => `
+    <div class="ledger-row">
+      <span class="person-name" data-name="${n}" style="cursor:pointer">${n}</span>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span class="amt expense">৳${fmtAmt(-b)}</span>
+        <button class="btn small settle-pay" data-name="${n}" data-bal="${-b}">পরিশোধ করলাম</button>
+      </div>
+    </div>`;
+  const html = payable.length ? payable.map(([n,b])=>row(n,b)).join('') : '<div class="empty">কোনো পাওনাদার নেই</div>';
+  document.getElementById('detailsTitle').textContent = 'পাওনাদার (আপনি দেবেন)';
+  document.getElementById('detailsBody').innerHTML = html;
+  document.getElementById('detailsModal').classList.add('show');
+  document.querySelectorAll('#detailsBody .person-name').forEach(el=>el.addEventListener('click', ()=>showPersonHistory(el.dataset.name)));
+  document.querySelectorAll('#detailsBody .settle-pay').forEach(el=>el.addEventListener('click', ()=>settlePayable(el.dataset.name, Number(el.dataset.bal))));
+}
+function showPersonHistory(name){
+  const rows = [...cache.ledger].filter(r=>(r['নাম']||'').trim()===name)
+    .sort((a,b)=> ((b['তারিখ']||'')+(b['সময়']||'')).localeCompare((a['তারিখ']||'')+(a['সময়']||'')));
+  const bal = computePersonBalances()[name] || 0;
+  document.getElementById('detailsTitle').textContent = name + ' — লেনদেনের ইতিহাস';
+  let topHtml = '';
+  if(bal>0.005){
+    topHtml = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--rule);">
+      <span>বর্তমান পাওনা: <b class="amt income">৳${fmtAmt(bal)}</b></span>
+      <button class="btn small settle-recv" data-name="${name}" data-bal="${bal}">গ্রহণ করলাম</button>
+    </div>`;
+  } else if(bal<-0.005){
+    topHtml = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--rule);">
+      <span>বর্তমান দেনা: <b class="amt expense">৳${fmtAmt(-bal)}</b></span>
+      <button class="btn small settle-pay" data-name="${name}" data-bal="${-bal}">পরিশোধ করলাম</button>
+    </div>`;
+  }
+  const html = rows.map(r=>{
+    const label = r['লেনদেন']==='বৃদ্ধি'
+      ? (r['ধরন']==='দেনাদার' ? 'ধার দিলাম' : 'ধার নিলাম')
+      : (r['ধরন']==='দেনাদার' ? 'ফেরত পেলাম' : 'ফেরত দিলাম');
+    return `<div style="padding:8px 0;border-bottom:1px dashed var(--rule);display:flex;justify-content:space-between;align-items:center;">
+      <div><div>${label}${r['নোট']?' — '+r['নোট']:''}</div><div style="font-size:12px;color:var(--muted)">${r['তারিখ']||''} ${r['সময়']||''}</div></div>
+      <div class="amt">৳${r['পরিমাণ']}</div>
+    </div>`;
+  }).join('') || '<div class="empty">কোনো লেনদেন নেই</div>';
+  document.getElementById('detailsBody').innerHTML = topHtml + html;
+  document.getElementById('detailsModal').classList.add('show');
+  const recvBtn = document.querySelector('#detailsBody .settle-recv');
+  if(recvBtn) recvBtn.addEventListener('click', ()=>settleReceivable(recvBtn.dataset.name, Number(recvBtn.dataset.bal)));
+  const payBtn = document.querySelector('#detailsBody .settle-pay');
+  if(payBtn) payBtn.addEventListener('click', ()=>settlePayable(payBtn.dataset.name, Number(payBtn.dataset.bal)));
+}
+
+async function settleReceivable(name, maxBal){
+  const val = prompt(`${name} থেকে কত টাকা গ্রহণ করলেন? (সর্বোচ্চ ৳${fmtAmt(maxBal)})`, fmtAmt(maxBal));
+  if(val===null) return;
+  const amt = Number(val);
+  if(!amt || amt<=0){ toast('সঠিক পরিমাণ লিখুন'); return; }
+  const now = new Date();
+  const data = {
+    'নাম': name, 'ধরন':'দেনাদার', 'লেনদেন':'হ্রাস', 'পরিমাণ': amt,
+    'তারিখ': todayStr(), 'সময়': String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0'),
+    'নোট': ''
+  };
+  try{
+    const res = await apiPost('লেনদেন','add', null, data);
+    cache.ledger.push({...data, ID:res.id});
+    const delta = cashDeltaForLedger('দেনাদার','হ্রাস', amt);
+    if(delta!==0) await setCashTotal(getCashTotal()+delta);
+    toast('গ্রহণ সংরক্ষণ করা হয়েছে');
+    showPersonHistory(name);
+    if(activeTab==='finance') renderFinance();
+  }catch(e){ toast('সংরক্ষণ করা যায়নি'); }
+}
+async function settlePayable(name, maxBal){
+  const val = prompt(`${name}কে কত টাকা পরিশোধ করলেন? (সর্বোচ্চ ৳${fmtAmt(maxBal)})`, fmtAmt(maxBal));
+  if(val===null) return;
+  const amt = Number(val);
+  if(!amt || amt<=0){ toast('সঠিক পরিমাণ লিখুন'); return; }
+  const now = new Date();
+  const data = {
+    'নাম': name, 'ধরন':'পাওনাদার', 'লেনদেন':'হ্রাস', 'পরিমাণ': amt,
+    'তারিখ': todayStr(), 'সময়': String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0'),
+    'নোট': ''
+  };
+  try{
+    const res = await apiPost('লেনদেন','add', null, data);
+    cache.ledger.push({...data, ID:res.id});
+    const delta = cashDeltaForLedger('পাওনাদার','হ্রাস', amt);
+    if(delta!==0) await setCashTotal(getCashTotal()+delta);
+    toast('পরিশোধ সংরক্ষণ করা হয়েছে');
+    showPersonHistory(name);
+    if(activeTab==='finance') renderFinance();
+  }catch(e){ toast('সংরক্ষণ করা যায়নি'); }
+}
+
+function renderFinance(){
+  const rows = [...cache.finance].sort((a,b)=> (b['তারিখ']||'').localeCompare(a['তারিখ']||''));
+  let income=0, expense=0;
+  const currentYm = todayStr().slice(0,7);
+  rows.forEach(r=>{
+    const amt=Number(r['পরিমাণ'])||0;
+    if((r['তারিখ']||'').slice(0,7)!==currentYm) return; // শুধু চলতি মাসের হিসাব
+    if(r['ধরন']==='আয়') income+=amt; else expense+=amt;
+  });
+  const balances = computePersonBalances();
+  let totalReceivable=0, totalPayable=0;
+  Object.values(balances).forEach(b=>{
+    if(b>0.005) totalReceivable+=b;
+    else if(b<-0.005) totalPayable+=-b;
+  });
+  const cashTotal = getCashTotal();
+  const balanceTotal = cashTotal + totalReceivable - totalPayable;
+  const names = [...new Set(cache.ledger.map(r=>(r['নাম']||'').trim()).filter(Boolean))].sort();
+
+  main.innerHTML = `
+    <div class="summary-bar">
+      <div class="summary-chip" id="incomeChip" style="cursor:pointer;"><div class="lbl">আয় (এই মাস)</div><div class="val" style="color:var(--sage)">৳${fmtAmt(income)}</div></div>
+      <div class="summary-chip" id="expenseChip" style="cursor:pointer;"><div class="lbl">খরচ (এই মাস)</div><div class="val" style="color:var(--clay)">৳${fmtAmt(expense)}</div></div>
+      <div class="summary-chip" id="cashChip" style="cursor:pointer;border-color:var(--gold);"><div class="lbl">ক্যাশ</div><div class="val" style="color:var(--gold)">৳${fmtAmt(cashTotal)}</div></div>
+    </div>
+    <div class="summary-bar">
+      <div class="summary-chip"><div class="lbl">ব্যালেন্স</div><div class="val">৳${fmtAmt(balanceTotal)}</div></div>
+      <div class="summary-chip" id="receivableChip" style="cursor:pointer;"><div class="lbl">দেনাদার</div><div class="val" style="color:var(--sage)">৳${fmtAmt(totalReceivable)}</div></div>
+      <div class="summary-chip" id="payableChip" style="cursor:pointer;"><div class="lbl">পাওনাদার</div><div class="val" style="color:var(--clay)">৳${fmtAmt(totalPayable)}</div></div>
+    </div>
+    <div class="card">
+      <h2>নতুন এন্ট্রি</h2>
+      <form id="finForm">
+        <div class="row2">
+          <div><label>তারিখ</label><input type="date" name="তারিখ" value="${todayStr()}" required></div>
+          <div><label>ধরন</label>
+            <select name="ধরন" id="finType">
+              <option value="আয়">আয়</option>
+              <option value="খরচ" selected>খরচ</option>
+              <option value="দেনাদার">ধার দিলাম</option>
+              <option value="পাওনাদার">ধার নিলাম</option>
+            </select>
+          </div>
+        </div>
+
+        <div id="normalFields">
+          <label>ক্যাটাগরি</label>
+          <input type="text" name="ক্যাটাগরি" id="catInput" list="catList" placeholder="যেমন: বাজার, বেতন" autocomplete="off">
+          <datalist id="catList"></datalist>
+        </div>
+
+        <div id="ledgerFields" style="display:none">
+          <label>নাম</label>
+          <input type="text" name="নাম" id="ledgerName" list="nameList" placeholder="নাম লিখুন বা লিস্ট থেকে বেছে নিন" autocomplete="off">
+          <datalist id="nameList">${names.map(n=>`<option value="${n}">`).join('')}</datalist>
+          <div class="row2">
+            <div><label>লেনদেনের ধরন</label><select name="লেনদেন" id="ledgerSubType"></select></div>
+            <div><label>সময়</label><input type="time" name="সময়" id="ledgerTime"></div>
+          </div>
+        </div>
+
+        <label>পরিমাণ (৳)</label><input type="number" name="পরিমাণ" step="0.01" required>
+        <label>নোট (ঐচ্ছিক)</label><input type="text" name="নোট" placeholder="সংক্ষিপ্ত নোট">
+        <button class="btn" type="submit">যোগ করুন</button>
+        <div class="status-msg" id="finMsg"></div>
+      </form>
+    </div>
+    <div class="card">
+      <h2>সাম্প্রতিক এন্ট্রি</h2>
+      <div id="finList">${rows.length? '' : '<div class="empty">কোনো এন্ট্রি নেই এখনো</div>'}</div>
+    </div>
+    <div class="card">
+      <h2>সাম্প্রতিক দেনা-পাওনা লেনদেন</h2>
+      <div id="ledgerList">${cache.ledger.length? '' : '<div class="empty">কোনো লেনদেন নেই এখনো</div>'}</div>
+    </div>
+  `;
+
+  document.getElementById('incomeChip').addEventListener('click', ()=>renderCategoriesView('আয়', currentYm));
+  document.getElementById('expenseChip').addEventListener('click', ()=>renderCategoriesView('খরচ', currentYm));
+  document.getElementById('receivableChip').addEventListener('click', showReceivableList);
+  document.getElementById('payableChip').addEventListener('click', showPayableList);
+  document.getElementById('cashChip').addEventListener('click', async ()=>{
+    const cur = getCashTotal();
+    const val = prompt('ক্যাশ টাকার পরিমাণ ঠিক করুন (৳)', cur);
+    if(val===null) return;
+    const num = Number(val);
+    if(isNaN(num)){ toast('সঠিক সংখ্যা লিখুন'); return; }
+    try{ await setCashTotal(num); renderFinance(); toast('ক্যাশ হালনাগাদ হয়েছে'); }
+    catch(e){ toast('সংরক্ষণ করা যায়নি'); }
+  });
+
+  const now = new Date();
+  document.getElementById('ledgerTime').value = String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
+
+  const finType = document.getElementById('finType');
+  const normalFields = document.getElementById('normalFields');
+  const ledgerFields = document.getElementById('ledgerFields');
+  const catInput = document.getElementById('catInput');
+  const nameInput = document.getElementById('ledgerName');
+  const subTypeSelect = document.getElementById('ledgerSubType');
+
+  function updateSubTypeOptions(){
+    if(finType.value === 'দেনাদার'){
+      subTypeSelect.innerHTML = `<option value="বৃদ্ধি">ধার দিলাম (তাকে দিলাম)</option><option value="হ্রাস">ফেরত পেলাম (তার কাছ থেকে)</option>`;
+    } else if(finType.value === 'পাওনাদার'){
+      subTypeSelect.innerHTML = `<option value="বৃদ্ধি">ধার নিলাম (তার কাছ থেকে)</option><option value="হ্রাস">ফেরত দিলাম (তাকে)</option>`;
+    }
+  }
+  function updateCategoryOptions(){
+    const list = getCategoryFrequency(finType.value);
+    document.getElementById('catList').innerHTML = list.map(c=>`<option value="${c}">`).join('');
+  }
+  finType.addEventListener('change', ()=>{
+    const isLedger = finType.value==='দেনাদার' || finType.value==='পাওনাদার';
+    normalFields.style.display = isLedger? 'none':'block';
+    ledgerFields.style.display = isLedger? 'block':'none';
+    catInput.required = !isLedger;
+    nameInput.required = isLedger;
+    if(isLedger) updateSubTypeOptions();
+    else updateCategoryOptions();
+  });
+  updateCategoryOptions();
+
+  const list = document.getElementById('finList');
+  rows.forEach(r=>{
+    const div = document.createElement('div');
+    div.className='ledger-row';
+    div.innerHTML = `
+      <div>
+        <div>${r['ক্যাটাগরি']||''} ${r['নোট']? '<span class="ledger-meta">— '+r['নোট']+'</span>':''}</div>
+        <div class="ledger-meta">${r['তারিখ']||''}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span class="amt ${r['ধরন']==='আয়'?'income':'expense'}">${r['ধরন']==='আয়'?'+':'−'}৳${r['পরিমাণ']}</span>
+        <button class="del" data-id="${r['ID']}" title="মুছুন">✕</button>
+      </div>`;
+    list.appendChild(div);
+  });
+  list.querySelectorAll('.del').forEach(b=>b.addEventListener('click', async ()=>{
+    try{
+      const rec = cache.finance.find(x=>x['ID']===b.dataset.id);
+      await apiPost('হিসাব','delete', b.dataset.id);
+      cache.finance = cache.finance.filter(x=>x['ID']!==b.dataset.id);
+      if(rec){
+        const delta = cashDeltaForFinance(rec['ধরন'], Number(rec['পরিমাণ'])||0);
+        if(delta!==0) await setCashTotal(getCashTotal()-delta);
+      }
+      renderFinance(); toast('মুছে ফেলা হয়েছে');
+    }
+    catch(e){ toast('মুছতে সমস্যা হয়েছে'); }
+  }));
+
+  const ledgerListEl = document.getElementById('ledgerList');
+  const ledgerRowsSorted = [...cache.ledger].sort((a,b)=> ((b['তারিখ']||'')+(b['সময়']||'')).localeCompare((a['তারিখ']||'')+(a['সময়']||''))).slice(0,20);
+  ledgerRowsSorted.forEach(r=>{
+    const label = r['লেনদেন']==='বৃদ্ধি'
+      ? (r['ধরন']==='দেনাদার' ? 'ধার দিলাম' : 'ধার নিলাম')
+      : (r['ধরন']==='দেনাদার' ? 'ফেরত পেলাম' : 'ফেরত দিলাম');
+    const div = document.createElement('div');
+    div.className='ledger-row';
+    div.innerHTML = `
+      <div>
+        <div>${r['নাম']||''} <span class="ledger-meta">— ${label}</span></div>
+        <div class="ledger-meta">${r['তারিখ']||''} ${r['সময়']||''}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span class="amt ${r['লেনদেন']==='বৃদ্ধি'?'income':'expense'}">৳${r['পরিমাণ']}</span>
+        <button class="del" data-id="${r['ID']}" title="মুছুন">✕</button>
+      </div>`;
+    ledgerListEl.appendChild(div);
+  });
+  ledgerListEl.querySelectorAll('.del').forEach(b=>b.addEventListener('click', async ()=>{
+    try{
+      const rec = cache.ledger.find(x=>x['ID']===b.dataset.id);
+      await apiPost('লেনদেন','delete', b.dataset.id);
+      cache.ledger = cache.ledger.filter(x=>x['ID']!==b.dataset.id);
+      if(rec){
+        const delta = cashDeltaForLedger(rec['ধরন'], rec['লেনদেন'], Number(rec['পরিমাণ'])||0);
+        if(delta!==0) await setCashTotal(getCashTotal()-delta);
+      }
+      renderFinance(); toast('মুছে ফেলা হয়েছে');
+    }
+    catch(e){ toast('মুছতে সমস্যা হয়েছে'); }
+  }));
+
+  document.getElementById('finForm').addEventListener('submit', async e=>{
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const data = Object.fromEntries(fd.entries());
+    const msg = document.getElementById('finMsg');
+    const isLedger = data['ধরন']==='দেনাদার' || data['ধরন']==='পাওনাদার';
+    if(isLedger && !(data['নাম']||'').trim()){
+      msg.textContent='নাম দিন'; msg.className='status-msg err'; return;
+    }
+    try{
+      const amt = Number(data['পরিমাণ'])||0;
+      if(isLedger){
+        const res = await apiPost('লেনদেন','add', null, data);
+        cache.ledger.push({...data, ID:res.id});
+        const delta = cashDeltaForLedger(data['ধরন'], data['লেনদেন'], amt);
+        if(delta!==0) await setCashTotal(getCashTotal()+delta);
+      } else {
+        const res = await apiPost('হিসাব','add', null, data);
+        cache.finance.push({...data, ID:res.id});
+        const delta = cashDeltaForFinance(data['ধরন'], amt);
+        if(delta!==0) await setCashTotal(getCashTotal()+delta);
+      }
+      renderFinance(); toast('যোগ করা হয়েছে');
+    }catch(err){ msg.textContent='সংরক্ষণ করা যায়নি: ' + err.message; msg.className='status-msg err'; }
+  });
+}
+
+/* ---- income/expense category grouping ---- */
+function getCategoryFrequency(type){
+  const freq = {};
+  cache.finance.forEach(r=>{
+    if(r['ধরন']===type){
+      const c = (r['ক্যাটাগরি']||'').trim();
+      if(!c) return;
+      freq[c] = (freq[c]||0)+1;
+    }
+  });
+  return Object.entries(freq).sort((a,b)=>b[1]-a[1]).map(([c])=>c);
+}
+
+function getMonthLabel(ym){
+  if(!ym || ym==='অজানা') return 'তারিখবিহীন';
+  const [y,m] = ym.split('-');
+  const idx = parseInt(m,10)-1;
+  return (MONTHS[idx]||m) + ' ' + toBn(y);
+}
+
+function financeViewToggle(type, activeView){
+  return `<div style="display:flex;gap:8px;margin-bottom:12px;">
+    <button type="button" class="btn small view-toggle-btn ${activeView==='months'?'':'ghost'}" data-view="months">মাস অনুযায়ী</button>
+    <button type="button" class="btn small view-toggle-btn ${activeView==='categories'?'':'ghost'}" data-view="categories">ক্যাটাগরি অনুযায়ী</button>
+  </div>`;
+}
+function wireFinanceToggle(type){
+  document.querySelectorAll('#detailsBody .view-toggle-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      if(btn.dataset.view==='months') renderMonthsView(type);
+      else renderCategoriesView(type, null);
+    });
+  });
+}
+
+/* top level: list of months for this type (আয় / খরচ) */
+function renderMonthsView(type){
+  const rows = cache.finance.filter(r=>r['ধরন']===type);
+  const groups = {};
+  rows.forEach(r=>{
+    const ym = (r['তারিখ']||'').slice(0,7) || 'অজানা';
+    const amt = Number(r['পরিমাণ'])||0;
+    if(!groups[ym]) groups[ym] = { total:0, count:0 };
+    groups[ym].total += amt;
+    groups[ym].count += 1;
+  });
+  const entries = Object.entries(groups).sort((a,b)=>b[0].localeCompare(a[0]));
+  const cls = type==='আয়' ? 'income' : 'expense';
+  const grandTotal = entries.reduce((s,[,g])=>s+g.total, 0);
+  const listHtml = entries.length ? entries.map(([ym,g])=>`
+    <div class="ledger-row month-row" data-ym="${ym}" style="cursor:pointer">
+      <div>
+        <div>${getMonthLabel(ym)}</div>
+        <div class="ledger-meta">${toBn(g.count)}টি এন্ট্রি</div>
+      </div>
+      <span class="amt ${cls}">৳${fmtAmt(g.total)}</span>
+    </div>`).join('') : '<div class="empty">কোনো এন্ট্রি নেই</div>';
+  const totalHtml = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--rule);">
+      <span>সর্বমোট (সব মাস)</span><b class="amt ${cls}">৳${fmtAmt(grandTotal)}</b></div>`;
+
+  document.getElementById('detailsTitle').textContent = (type==='আয়'?'সমস্ত আয়':'সমস্ত খরচ');
+  document.getElementById('detailsBody').innerHTML = financeViewToggle(type,'months') + totalHtml + listHtml;
+  document.getElementById('detailsModal').classList.add('show');
+  wireFinanceToggle(type);
+  document.querySelectorAll('#detailsBody .month-row').forEach(el=>{
+    el.addEventListener('click', ()=>renderCategoriesView(type, el.dataset.ym));
+  });
+}
+
+/* middle level: category breakdown, optionally scoped to one month (ym) */
+function renderCategoriesView(type, ym){
+  const rows = cache.finance.filter(r=>r['ধরন']===type && (!ym || (r['তারিখ']||'').slice(0,7)===ym));
+  const groups = {};
+  rows.forEach(r=>{
+    const cat = (r['ক্যাটাগরি']||'').trim() || '(অনির্দিষ্ট)';
+    const amt = Number(r['পরিমাণ'])||0;
+    if(!groups[cat]) groups[cat] = { total:0, count:0 };
+    groups[cat].total += amt;
+    groups[cat].count += 1;
+  });
+  const entries = Object.entries(groups).sort((a,b)=>b[1].total-a[1].total);
+  const cls = type==='আয়' ? 'income' : 'expense';
+  const grandTotal = entries.reduce((s,[,g])=>s+g.total, 0);
+  const listHtml = entries.length ? entries.map(([cat,g])=>`
+    <div class="ledger-row cat-summary-row" data-cat="${cat}" style="cursor:pointer">
+      <div>
+        <div>${cat}</div>
+        <div class="ledger-meta">${toBn(g.count)}টি এন্ট্রি</div>
+      </div>
+      <span class="amt ${cls}">৳${fmtAmt(g.total)}</span>
+    </div>`).join('') : '<div class="empty">কোনো এন্ট্রি নেই</div>';
+  const totalHtml = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--rule);">
+      <span>সর্বমোট</span><b class="amt ${cls}">৳${fmtAmt(grandTotal)}</b></div>`;
+
+  document.getElementById('detailsTitle').textContent = ym
+    ? getMonthLabel(ym) + ' — ক্যাটাগরি অনুযায়ী'
+    : (type==='আয়'?'সমস্ত আয় — ক্যাটাগরি অনুযায়ী':'সমস্ত খরচ — ক্যাটাগরি অনুযায়ী');
+
+  const headHtml = ym
+    ? `<div class="notice-toggle back-to-months" style="margin-bottom:10px;">← মাসের লিস্টে ফিরে যান</div>`
+    : financeViewToggle(type,'categories');
+
+  document.getElementById('detailsBody').innerHTML = headHtml + totalHtml + listHtml;
+  document.getElementById('detailsModal').classList.add('show');
+  if(ym){
+    document.querySelector('#detailsBody .back-to-months').addEventListener('click', ()=>renderMonthsView(type));
+  } else {
+    wireFinanceToggle(type);
+  }
+  document.querySelectorAll('#detailsBody .cat-summary-row').forEach(el=>{
+    el.addEventListener('click', ()=>renderEntriesView(type, el.dataset.cat, ym));
+  });
+}
+
+/* bottom level: dated entries for one category, optionally scoped to one month (ym) */
+function renderEntriesView(type, cat, ym){
+  const rows = cache.finance.filter(r=>{
+    const c = (r['ক্যাটাগরি']||'').trim() || '(অনির্দিষ্ট)';
+    if(r['ধরন']!==type || c!==cat) return false;
+    if(ym && (r['তারিখ']||'').slice(0,7)!==ym) return false;
+    return true;
+  }).sort((a,b)=>(b['তারিখ']||'').localeCompare(a['তারিখ']||''));
+  const cls = type==='আয়' ? 'income' : 'expense';
+  const total = rows.reduce((s,r)=>s+(Number(r['পরিমাণ'])||0),0);
+
+  const backHtml = `<div class="notice-toggle back-to-categories" style="margin-bottom:10px;">← ফিরে যান</div>`;
+  const totalHtml = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--rule);">
+    <span>মোট</span><b class="amt ${cls}">৳${fmtAmt(total)}</b></div>`;
+  const rowsHtml = rows.map(r=>`
+    <div class="ledger-row">
+      <div>
+        <div>${r['তারিখ']||''}</div>
+        ${r['নোট']? `<div class="ledger-meta">${r['নোট']}</div>`:''}
+      </div>
+      <span class="amt ${cls}">৳${r['পরিমাণ']}</span>
+    </div>`).join('') || '<div class="empty">কোনো এন্ট্রি নেই</div>';
+
+  document.getElementById('detailsTitle').textContent = cat + (ym? ' — '+getMonthLabel(ym) : ' — বিস্তারিত');
+  document.getElementById('detailsBody').innerHTML = backHtml + totalHtml + rowsHtml;
+  document.getElementById('detailsModal').classList.add('show');
+  document.querySelector('#detailsBody .back-to-categories').addEventListener('click', ()=>renderCategoriesView(type, ym));
+}
+
+/* ---------------- PRAYER: helpers ---------------- */
+function getBanglaDate(date){
+  const banglaMonths = ['বৈশাখ','জ্যৈষ্ঠ','আষাঢ়','শ্রাবণ','ভাদ্র','আশ্বিন','কার্তিক','অগ্রহায়ণ','পৌষ','মাঘ','ফাল্গুন','চৈত্র'];
+  const gy = date.getFullYear();
+  let by;
+  if((date.getMonth()+1===4 && date.getDate()>=14) || date.getMonth()+1>4) by = gy-593; else by = gy-594;
+  const startDates = [{m:4,d:14},{m:5,d:15},{m:6,d:15},{m:7,d:16},{m:8,d:16},{m:9,d:16},{m:10,d:16},{m:11,d:15},{m:12,d:15},{m:1,d:14},{m:2,d:13},{m:3,d:15}];
+  let bm=0, bd=1;
+  for(let i=0;i<startDates.length;i++){
+    const cur = startDates[i], nxt = startDates[(i+1)%12];
+    const curDate = new Date(gy, cur.m-1, cur.d);
+    let nextYear = gy; if(nxt.m < cur.m) nextYear++;
+    const nextDate = new Date(nextYear, nxt.m-1, nxt.d);
+    if(date >= curDate && date < nextDate){ bm=i; bd = Math.floor((date-curDate)/86400000)+1; break; }
+  }
+  return `${toBn(bd)} ${banglaMonths[bm]} ${toBn(by)}`;
+}
+function getFutureDate(daysToAdd){
+  const d = new Date(); d.setDate(d.getDate()+daysToAdd);
+  return `${toBn(d.getDate())} ${MONTHS[d.getMonth()]} ${toBn(d.getFullYear())} (${DAY_NAMES[d.getDay()]})`;
+}
+function daysUntilEvent(evM, evD, curM, curD){
+  const dim=30;
+  if(evM===curM) return evD-curD;
+  if(evM>curM) return (dim-curD)+((evM-curM-1)*dim)+evD;
+  return (dim-curD)+((12-curM+evM-1)*dim)+evD;
+}
+async function loadIslamicInfo(){
+  try{
+    const r = await fetch('https://api.aladhan.com/v1/gToH');
+    const data = await r.json();
+    const h = data.data.hijri;
+    hijriInfo = { day: parseInt(h.day), month: parseInt(h.month.number), year: h.year };
+
+    let upcoming = [];
+    for(let y=0;y<15;y++){
+      ISLAMIC_EVENTS.forEach(ev=>{
+        upcoming.push({ title: ev.title, days: daysUntilEvent(ev.month, ev.day, hijriInfo.month, hijriInfo.day) + y*354 });
+      });
+    }
+    upcoming.sort((a,b)=>a.days-b.days);
+    const main = upcoming[0];
+    let mainHtml='', moreHtml=[];
+    upcoming.slice(0,10).forEach(ev=>{
+      const html = ev.days===0
+        ? `<div class="notice-item">আজ ${ev.title}</div>`
+        : `<div class="notice-item">${ev.title} এর আর ${toBn(ev.days)} দিন বাকি<div class="notice-sub">${getFutureDate(ev.days)}</div></div>`;
+      if(ev.title===main.title && ev.days===main.days) mainHtml = html; else moreHtml.push(html);
+    });
+    if(new Date().getDay()===5) moreHtml.push('<div class="notice-item">আজ জুমার দিন</div>');
+    islamicNoticesHtml = { main: mainHtml, more: moreHtml.join('') };
+
+    const todayAmal = DAILY_AMAL.filter(a=>a.month===hijriInfo.month && a.day===hijriInfo.day);
+    dailyAmalHtml = todayAmal.length ? todayAmal.map(a=>a.text).join('<br>') : '';
+  }catch(e){
+    hijriInfo = null;
+  }
+  if(activeTab==='prayer') renderPrayer();
+}
+
+function getTodayPrayerRecord(){
+  const d = todayStr();
+  return cache.prayer.find(r=>r['তারিখ']===d) || null;
+}
+function parseCell(val){
+  if(!val) return null;
+  try{ return JSON.parse(val); }catch(e){ return null; }
+}
+function badgeFor(cellVal){
+  const parsed = parseCell(cellVal);
+  if(!parsed) return '<span class="pt-badge">–</span>';
+  const doneCount = (parsed.checks||[]).filter(Boolean).length;
+  return doneCount>0 ? `<span class="pt-badge ok">✓${toBn(doneCount)}</span>` : `<span class="pt-badge no">✕</span>`;
+}
+
+function getQazaTotal(){
+  return cache.qaza[0] ? Number(cache.qaza[0]['মোট'])||0 : null;
+}
+async function setQazaTotal(total){
+  if(cache.qaza[0]){
+    await apiPost('কাজা','update', cache.qaza[0]['ID'], {'মোট': total});
+    cache.qaza[0]['মোট'] = total;
+  } else {
+    const res = await apiPost('কাজা','add', null, {'মোট': total});
+    cache.qaza = [{ID:res.id, 'মোট': total}];
+  }
+}
+
+/* ---------------- PRAYER: render ---------------- */
+function renderPrayer(){
+  const today = new Date();
+  const rec = getTodayPrayerRecord() || {};
+  const qazaTotal = getQazaTotal();
+
+  main.innerHTML = `
+    <div class="card">
+      <div class="islamic-date">${toBn(today.getDate())} ${MONTHS[today.getMonth()]} ${toBn(today.getFullYear())} · ${getBanglaDate(today)}</div>
+      <div class="hijri-date">${hijriInfo? '☪ '+toBn(hijriInfo.day)+' '+HIJRI_MONTHS[hijriInfo.month-1]+' '+toBn(hijriInfo.year)+' হিজরি' : 'হিজরি তারিখ লোড হচ্ছে…'}</div>
+      ${dailyAmalHtml? `<div class="amal-of-day">${dailyAmalHtml}</div>` : ''}
+      <h2 style="margin-top:14px;">☪ ইসলামিক নোটিশ</h2>
+      ${islamicNoticesHtml.main || '<div class="empty">লোড হচ্ছে…</div>'}
+      ${islamicNoticesHtml.more? `<div class="notice-toggle" id="moreToggle">▼ আরো ইসলামিক নোটিশ</div><div class="more-notices" id="moreNotices">${islamicNoticesHtml.more}</div>` : ''}
+    </div>
+
+    <div class="card">
+      <h2>কাজা নামাজ</h2>
+      ${qazaTotal===null ? `
+        <p style="font-size:13px;color:var(--muted);margin-bottom:10px;">এখনো হিসাব করা হয়নি। জন্ম তারিখ দিয়ে আপনার মোট কাজা রাকাত হিসাব করুন।</p>
+        <button class="btn gold full" id="openQazaCalc">কাজা হিসাব করুন</button>
+      ` : `
+        <div class="qaza-box">
+          <div><div class="qaza-num">${toBn(qazaTotal)}</div><div class="qaza-lbl">রাকাত বাকি</div></div>
+          <button class="btn" id="openAda">আদায় করলাম</button>
+        </div>
+        <button class="btn ghost small" id="openQazaCalc" style="margin-top:10px;">নতুন করে হিসাব করুন</button>
+      `}
+    </div>
+
+    <div class="card">
+      <h2>নামাজের সময় ও ট্র্যাকার</h2>
+      <div id="ptList"></div>
+      <div class="hint" style="font-size:12px;color:var(--muted);text-align:center;margin-top:6px;">নামাজের নামে ট্যাপ করলে রাকাতের বিস্তারিত চেকলিস্ট খুলবে</div>
+    </div>
+
+    <div class="card">
+      <h2>কুরআন তেলাওয়াত</h2>
+      <input type="text" id="quranNote" placeholder="আজকের তেলাওয়াতের পরিকল্পনা লিখুন" value="${rec['কুরআন']||''}">
+      <button class="btn small" id="quranSaveBtn" style="margin-top:10px;">সংরক্ষণ করুন</button>
+    </div>
+
+    <div class="card">
+      <h2>দৈনিক আমল হিস্ট্রি</h2>
+      <div style="overflow-x:auto;">
+        <table class="amal-table">
+          <thead><tr><th>তারিখ</th>${PRAYERS.map(p=>`<th>${p}</th>`).join('')}<th>কুরআন</th></tr></thead>
+          <tbody id="amalHistoryBody"></tbody>
+        </table>
+      </div>
+    </div>
+  `;
+
+  // prayer time rows
+  const ptList = document.getElementById('ptList');
+  const withCountdown = PRAYERS.map(name=>{
+    const t = prayerTimes[name] || '';
+    let diff = Infinity;
+    if(t){
+      const [h,m] = t.split(':');
+      const pt = new Date(); pt.setHours(h,m,0,0);
+      if(pt < new Date()) pt.setDate(pt.getDate()+1);
+      diff = pt - new Date();
+    }
+    return { name, t, diff };
+  }).sort((a,b)=>a.diff-b.diff);
+  withCountdown.forEach((p,i)=>{
+    const row = document.createElement('div');
+    row.className = 'pt-row' + (i===0?' active-prayer':'');
+    row.innerHTML = `
+      <div class="pt-name" data-name="${p.name}">${p.name}</div>
+      <input type="time" value="${p.t}" data-name="${p.name}" class="pt-time">
+      <div class="pt-count" data-count="${p.name}">--</div>
+      <div>${badgeFor(rec[p.name])}</div>`;
+    ptList.appendChild(row);
+  });
+  ptList.querySelectorAll('.pt-name').forEach(el=>el.addEventListener('click', ()=>openRakatModal(el.dataset.name)));
+  ptList.querySelectorAll('.pt-time').forEach(el=>el.addEventListener('change', async e=>{
+    prayerTimes[e.target.dataset.name] = e.target.value;
+    await localSet('prayerTimes', prayerTimes);
+    renderPrayer();
+  }));
+  updatePrayerCountdowns();
+
+  // history table
+  const hb = document.getElementById('amalHistoryBody');
+  const rows = [...cache.prayer].sort((a,b)=>(b['তারিখ']||'').localeCompare(a['তারিখ']||'')).slice(0,30);
+  if(!rows.length){ hb.innerHTML = `<tr><td colspan="${PRAYERS.length+2}" style="padding:14px;color:var(--muted)">এখনো কোনো ডাটা নেই</td></tr>`; }
+  rows.forEach(r=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td class="dt">${r['তারিখ']}</td>${PRAYERS.map(p=>`<td>${badgeFor(r[p])}</td>`).join('')}<td>${r['কুরআন']? '📖':'–'}</td>`;
+    tr.style.cursor='pointer';
+    tr.addEventListener('click', ()=>showDayDetails(r));
+    hb.appendChild(tr);
+  });
+
+  // wire up buttons
+  const openQazaCalc = document.getElementById('openQazaCalc');
+  if(openQazaCalc) openQazaCalc.addEventListener('click', openQazaModal);
+  const openAda = document.getElementById('openAda');
+  if(openAda) openAda.addEventListener('click', ()=>{ document.getElementById('adaModal').classList.add('show'); });
+  const moreToggle = document.getElementById('moreToggle');
+  if(moreToggle) moreToggle.addEventListener('click', ()=>{
+    const box = document.getElementById('moreNotices');
+    const open = box.style.display==='block';
+    box.style.display = open? 'none':'block';
+    moreToggle.textContent = open? '▼ আরো ইসলামিক নোটিশ':'▲ কম দেখুন';
+  });
+  document.getElementById('quranSaveBtn').addEventListener('click', async ()=>{
+    const val = document.getElementById('quranNote').value;
+    try{
+      if(rec['ID']){ await apiPost('নামাজ','update', rec['ID'], {'কুরআন': val}); rec['কুরআন']=val; }
+      else { const res = await apiPost('নামাজ','add', null, {'তারিখ':todayStr(),'কুরআন':val}); cache.prayer.push({'তারিখ':todayStr(),'কুরআন':val, ID:res.id}); }
+      toast('সংরক্ষণ করা হয়েছে');
+    }catch(e){ toast('সংরক্ষণ করা যায়নি'); }
+  });
+}
+
+function showDayDetails(r){
+  document.getElementById('detailsTitle').textContent = r['তারিখ'];
+  let html = '';
+  PRAYERS.forEach(p=>{
+    const parsed = parseCell(r[p]);
+    html += `<div style="margin-bottom:10px;"><b>${p}</b>: `;
+    if(!parsed){ html += 'তথ্য নেই</div>'; return; }
+    const items = (PRAYER_DETAILS[p]||[]).filter((it,idx)=>parsed.checks && parsed.checks[idx]).map(it=>it.text);
+    html += (parsed.jamaat? 'জামায়াতে আদায়। ':'') + (items.length? items.join(', ') : 'কিছু চেক করা হয়নি') + '</div>';
+  });
+  if(r['কুরআন']) html += `<div><b>কুরআন:</b> ${r['কুরআন']}</div>`;
+  document.getElementById('detailsBody').innerHTML = html;
+  document.getElementById('detailsModal').classList.add('show');
+}
+document.getElementById('detailsCloseBtn').addEventListener('click', ()=>document.getElementById('detailsModal').classList.remove('show'));
+
+/* ---- countdown ticking ---- */
+function updatePrayerCountdowns(){
+  if(activeTab!=='prayer') return;
+  document.querySelectorAll('.pt-count').forEach(el=>{
+    const name = el.dataset.count;
+    const t = prayerTimes[name];
+    if(!t){ el.textContent='--'; return; }
+    const [h,m] = t.split(':');
+    const pt = new Date(); pt.setHours(h,m,0,0);
+    if(pt < new Date()) pt.setDate(pt.getDate()+1);
+    const diff = pt - new Date();
+    const hrs = Math.floor(diff/3600000), mins = Math.floor((diff/60000)%60), secs = Math.floor((diff/1000)%60);
+    el.textContent = `${toBn(hrs)} ঘ ${toBn(mins)} মি ${toBn(secs)} সে`;
+  });
+}
+setInterval(updatePrayerCountdowns, 1000);
+
+/* ---- qaza calculator ---- */
+function openQazaModal(){
+  document.getElementById('qazaStep1').style.display='block';
+  document.getElementById('qazaStep2').style.display='none';
+  document.getElementById('qazaMsg').textContent='';
+  document.getElementById('qazaModal').classList.add('show');
+}
+document.getElementById('qazaCloseBtn').addEventListener('click', ()=>document.getElementById('qazaModal').classList.remove('show'));
+document.getElementById('qazaStartOption').addEventListener('change', e=>{
+  document.getElementById('qazaCustomWrap').style.display = e.target.value==='custom' ? 'block':'none';
+});
+async function gregorianToHijri(dateStr){
+  const [y,m,d] = dateStr.split('-');
+  const r = await fetch(`https://api.aladhan.com/v1/gToH?date=${d}-${m}-${y}`);
+  const data = await r.json();
+  return data.data.hijri;
+}
+function hijriToDays(y,m,d){ return (y*354)+(m*29.5)+d; }
+let pendingQazaTotal = 0;
+document.getElementById('qazaCalcBtn').addEventListener('click', async ()=>{
+  const birth = document.getElementById('birthDateInput').value;
+  const msg = document.getElementById('qazaMsg');
+  if(!birth){ msg.textContent='জন্ম তারিখ দিন'; msg.className='status-msg err'; return; }
+  msg.textContent='হিসাব করা হচ্ছে…'; msg.className='status-msg';
+  try{
+    const birthHijri = await gregorianToHijri(birth);
+    const balighYear = parseInt(birthHijri.year)+10, balighMonth = parseInt(birthHijri.month.number), balighDay = parseInt(birthHijri.day);
+    let endHijri;
+    if(document.getElementById('qazaStartOption').value==='today'){
+      endHijri = await gregorianToHijri(todayStr());
+    } else {
+      const cd = document.getElementById('qazaCustomDate').value;
+      if(!cd){ msg.textContent='তারিখ সিলেক্ট করুন'; msg.className='status-msg err'; return; }
+      endHijri = await gregorianToHijri(cd);
+    }
+    const startDays = hijriToDays(balighYear, balighMonth, balighDay);
+    const endDays = hijriToDays(parseInt(endHijri.year), parseInt(endHijri.month.number), parseInt(endHijri.day));
+    const totalDays = Math.max(0, Math.floor(endDays-startDays));
+    pendingQazaTotal = totalDays * 17;
+    document.getElementById('qazaResultText').textContent = toBn(pendingQazaTotal) + ' রাকাত';
+    document.getElementById('qazaStep1').style.display='none';
+    document.getElementById('qazaStep2').style.display='block';
+  }catch(e){ msg.textContent='হিসাব করা যায়নি, আবার চেষ্টা করুন'; msg.className='status-msg err'; }
+});
+document.getElementById('qazaSaveBtn').addEventListener('click', async ()=>{
+  try{ await setQazaTotal(pendingQazaTotal); document.getElementById('qazaModal').classList.remove('show'); renderPrayer(); toast('সংরক্ষণ করা হয়েছে'); }
+  catch(e){ toast('সংরক্ষণ করা যায়নি'); }
+});
+document.getElementById('adaCloseBtn').addEventListener('click', ()=>document.getElementById('adaModal').classList.remove('show'));
+document.getElementById('adaSaveBtn').addEventListener('click', async ()=>{
+  const val = parseInt(document.getElementById('adaInput').value);
+  const total = getQazaTotal()||0;
+  if(!val || val<=0){ toast('সঠিক রাকাত লিখুন'); return; }
+  const newTotal = Math.max(0, total-val);
+  try{ await setQazaTotal(newTotal); document.getElementById('adaModal').classList.remove('show'); document.getElementById('adaInput').value=''; renderPrayer(); toast('হালনাগাদ হয়েছে'); }
+  catch(e){ toast('সংরক্ষণ করা যায়নি'); }
+});
+
+/* ---- rakat checklist modal ---- */
+function openRakatModal(name){
+  currentRakatPrayer = name;
+  const rec = getTodayPrayerRecord() || {};
+  const parsed = parseCell(rec[name]) || { jamaat:false, checks: PRAYER_DETAILS[name].map(()=>false) };
+  document.getElementById('rakatModalTitle').textContent = name;
+  let html = `
+    <div class="rakat-row">
+      <span>🕌 জামায়াতে আদায় করেছি</span>
+      <label class="switch"><input type="checkbox" id="jamaatChk" ${parsed.jamaat?'checked':''}><span class="slider"></span></label>
+    </div>`;
+  PRAYER_DETAILS[name].forEach((it,idx)=>{
+    html += `
+      <div class="rakat-row">
+        <span class="${it.cls}">${it.text}</span>
+        <label class="switch"><input type="checkbox" class="rakChk" data-idx="${idx}" ${parsed.checks[idx]?'checked':''}><span class="slider"></span></label>
+      </div>`;
+  });
+  document.getElementById('rakatModalBody').innerHTML = html;
+  document.getElementById('rakatModal').classList.add('show');
+}
+document.getElementById('rakatCloseBtn').addEventListener('click', ()=>document.getElementById('rakatModal').classList.remove('show'));
+document.getElementById('rakatSaveBtn').addEventListener('click', async ()=>{
+  const name = currentRakatPrayer;
+  const jamaat = document.getElementById('jamaatChk').checked;
+  const checks = [...document.querySelectorAll('.rakChk')].map(c=>c.checked);
+  const cellVal = JSON.stringify({ jamaat, checks });
+
+  // reduce qaza total by newly-checked nafl rakat (matches reference behaviour)
+  const rec = getTodayPrayerRecord() || {};
+  const prevParsed = parseCell(rec[name]) || { checks: PRAYER_DETAILS[name].map(()=>false) };
+  let naflDelta = 0;
+  PRAYER_DETAILS[name].forEach((it,idx)=>{
+    const wasChecked = !!prevParsed.checks[idx];
+    const isChecked = !!checks[idx];
+    if(it.cls==='r-nafl' && isChecked && !wasChecked) naflDelta += it.rakat;
+  });
+
+  try{
+    if(rec['ID']){
+      await apiPost('নামাজ','update', rec['ID'], {[name]: cellVal});
+      rec[name] = cellVal;
+    } else {
+      const res = await apiPost('নামাজ','add', null, {'তারিখ':todayStr(), [name]: cellVal});
+      cache.prayer.push({'তারিখ':todayStr(), [name]: cellVal, ID:res.id});
+    }
+    if(naflDelta>0 && getQazaTotal()!==null){
+      await setQazaTotal(Math.max(0, getQazaTotal()-naflDelta));
+    }
+    document.getElementById('rakatModal').classList.remove('show');
+    renderPrayer();
+    toast('সংরক্ষণ করা হয়েছে');
+  }catch(e){ toast('সংরক্ষণ করা যায়নি'); }
+});
+
+/* ---------------- ROUTINE: shared helpers (log, postpone-count, missed detection) ---------------- */
+async function logRoutineEvent(routineId, task, event, dueDate, newDate, note){
+  const now = new Date();
+  const data = {
+    'RoutineID': routineId,
+    'কাজ': task || '',
+    'ইভেন্ট': event,
+    'তারিখ': dueDate || '',
+    'নতুন_তারিখ': newDate || '',
+    'নোট': note || '',
+    'সময়': todayStr() + ' ' + String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0')
+  };
+  try{
+    const res = await apiPost('রুটিন_লগ', 'add', null, data);
+    cache.routineLog.push({...data, ID: res.id});
+  }catch(e){ /* history logging is best-effort; don't block the main action */ }
+}
+function getPostponeCount(routineId){
+  return cache.routineLog.filter(l=>l['RoutineID']===routineId && l['ইভেন্ট']==='পিছানো').length;
+}
+async function detectMissedRoutines(){
+  const today = todayStr();
+  const already = new Set(cache.routineLog.filter(l=>l['ইভেন্ট']==='মিসড').map(l=>l['RoutineID']+'|'+l['তারিখ']));
+  const overdue = cache.routine.filter(r=> r['ধরন']==='তারিখ' && r['স্ট্যাটাস']==='বাকি' && r['তারিখ'] && r['তারিখ']<today);
+  for(const r of overdue){
+    const key = r['ID']+'|'+r['তারিখ'];
+    if(already.has(key)) continue;
+    await logRoutineEvent(r['ID'], r['কাজ'], 'মিসড', r['তারিখ'], '', '');
+    already.add(key);
+  }
+}
+
+/* ---------------- ROUTINE: "নতুন কাজ যোগ করুন" popup (wired once) ---------------- */
+let rtType = 'সাপ্তাহিক';
+function openAddRoutineModal(){
+  document.getElementById('rtForm').reset();
+  rtType = 'সাপ্তাহিক';
+  document.querySelectorAll('#addRoutineModal .rt-type-btn').forEach(b=>{
+    const active = b.dataset.type==='সাপ্তাহিক';
+    b.classList.toggle('active', active);
+    b.classList.toggle('ghost', !active);
+  });
+  document.getElementById('rtDayWrap').style.display='block';
+  document.getElementById('rtDateWrap').style.display='none';
+  document.querySelector('#rtDateWrap input[name="তারিখ"]').value = todayStr();
+  document.getElementById('addRoutineModal').classList.add('show');
+}
+document.getElementById('addRoutineCloseBtn').addEventListener('click', ()=>document.getElementById('addRoutineModal').classList.remove('show'));
+document.querySelectorAll('#addRoutineModal .rt-type-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    rtType = btn.dataset.type;
+    document.querySelectorAll('#addRoutineModal .rt-type-btn').forEach(b=>{
+      b.classList.toggle('active', b===btn);
+      b.classList.toggle('ghost', b!==btn);
+    });
+    document.getElementById('rtDayWrap').style.display = rtType==='সাপ্তাহিক' ? 'block':'none';
+    document.getElementById('rtDateWrap').style.display = rtType==='তারিখ' ? 'block':'none';
+  });
+});
+document.getElementById('rtForm').addEventListener('submit', async e=>{
+  e.preventDefault();
+  const fd = Object.fromEntries(new FormData(e.target).entries());
+  if(!(fd['কাজ']||'').trim()){ toast('কাজের নাম দিন'); return; }
+  const data = { 'ধরন': rtType, 'কাজ': fd['কাজ'], 'সময়': fd['সময়']||'', 'স্ট্যাটাস':'বাকি' };
+  if(rtType==='সাপ্তাহিক'){ data['দিন'] = fd['দিন']; data['তারিখ'] = ''; }
+  else { data['তারিখ'] = fd['তারিখ']||todayStr(); data['দিন'] = ''; }
+  try{
+    const res = await apiPost('রুটিন','add', null, data);
+    cache.routine.push({...data, ID:res.id});
+    document.getElementById('addRoutineModal').classList.remove('show');
+    if(activeTab==='routine') renderRoutine();
+    updateHeaderLine();
+    toast('যোগ করা হয়েছে');
+  }catch(err){ toast('সংরক্ষণ করা যায়নি'); }
+});
+
+/* ---------------- ROUTINE: single action-sheet for a date-based task (wired once) ---------------- */
+let rtActionId = null;
+function openRtActionModal(id, directReschedule){
+  rtActionId = id;
+  const r = cache.routine.find(x=>x['ID']===id);
+  document.getElementById('rtActionTitle').textContent = r ? r['কাজ'] : 'কাজ';
+  document.getElementById('rtActionButtons').style.display = directReschedule ? 'none' : 'flex';
+  document.getElementById('rtActionRescheduleBox').style.display = directReschedule ? 'flex' : 'none';
+  document.getElementById('rtActionNewDate').value = (r && r['তারিখ']) || todayStr();
+  document.getElementById('rtActionNote').value = '';
+  document.getElementById('rtActionModal').classList.add('show');
+}
+function closeRtActionModal(){
+  document.getElementById('rtActionModal').classList.remove('show');
+  rtActionId = null;
+}
+document.getElementById('rtActionCloseBtn').addEventListener('click', closeRtActionModal);
+document.querySelector('#rtActionButtons [data-act="done"]').addEventListener('click', async ()=>{
+  const r = cache.routine.find(x=>x['ID']===rtActionId);
+  if(!r) return;
+  try{
+    await apiPost('রুটিন','update', r['ID'], {'স্ট্যাটাস':'সম্পন্ন'});
+    await logRoutineEvent(r['ID'], r['কাজ'], 'সম্পন্ন', r['তারিখ'], '', '');
+    r['স্ট্যাটাস']='সম্পন্ন';
+    closeRtActionModal();
+    if(activeTab==='routine') renderRoutine();
+    updateHeaderLine(); toast('সম্পন্ন হিসেবে চিহ্নিত হলো');
+  }catch(err){ toast('হালনাগাদ করা যায়নি'); }
+});
+document.querySelector('#rtActionButtons [data-act="skip"]').addEventListener('click', async ()=>{
+  const r = cache.routine.find(x=>x['ID']===rtActionId);
+  if(!r) return;
+  try{
+    await apiPost('রুটিন','update', r['ID'], {'স্ট্যাটাস':'বাতিল'});
+    await logRoutineEvent(r['ID'], r['কাজ'], 'বাতিল', r['তারিখ'], '', '');
+    r['স্ট্যাটাস']='বাতিল';
+    closeRtActionModal();
+    if(activeTab==='routine') renderRoutine();
+    updateHeaderLine(); toast('কাজটি বাতিল করা হলো');
+  }catch(err){ toast('হালনাগাদ করা যায়নি'); }
+});
+document.querySelector('#rtActionButtons [data-act="reschedule"]').addEventListener('click', ()=>{
+  document.getElementById('rtActionRescheduleBox').style.display = 'flex';
+});
+document.getElementById('rtActionConfirmReschedule').addEventListener('click', async ()=>{
+  const r = cache.routine.find(x=>x['ID']===rtActionId);
+  if(!r) return;
+  const newDate = document.getElementById('rtActionNewDate').value;
+  const note = document.getElementById('rtActionNote').value.trim();
+  if(!newDate){ toast('তারিখ বেছে নিন'); return; }
+  const oldDate = r['তারিখ'];
+  try{
+    await apiPost('রুটিন','update', r['ID'], {'তারিখ':newDate, 'স্ট্যাটাস':'বাকি'});
+    await logRoutineEvent(r['ID'], r['কাজ'], 'পিছানো', oldDate, newDate, note);
+    r['তারিখ']=newDate; r['স্ট্যাটাস']='বাকি';
+    closeRtActionModal();
+    if(activeTab==='routine') renderRoutine();
+    updateHeaderLine(); toast('নতুন তারিখে সরানো হয়েছে');
+  }catch(err){ toast('হালনাগাদ করা যায়নি'); }
+});
+document.querySelector('#rtActionButtons [data-act="delete"]').addEventListener('click', async ()=>{
+  const r = cache.routine.find(x=>x['ID']===rtActionId);
+  if(!r) return;
+  try{
+    await apiPost('রুটিন','delete', r['ID']);
+    cache.routine = cache.routine.filter(x=>x['ID']!==r['ID']);
+    closeRtActionModal();
+    if(activeTab==='routine') renderRoutine();
+    updateHeaderLine(); toast('মুছে ফেলা হয়েছে');
+  }catch(err){ toast('মুছতে সমস্যা হয়েছে'); }
+});
+
+/* ---------------- ROUTINE: ইতিহাস (history search by date, wired once) ---------------- */
+function openRoutineHistory(){
+  const d = document.getElementById('rtHistoryDate');
+  d.value = todayStr();
+  renderRoutineHistoryFor(todayStr());
+  document.getElementById('routineHistoryModal').classList.add('show');
+}
+document.getElementById('rtHistoryCloseBtn').addEventListener('click', ()=>document.getElementById('routineHistoryModal').classList.remove('show'));
+document.getElementById('rtHistoryDate').addEventListener('change', e=>renderRoutineHistoryFor(e.target.value));
+function getRoutinesForDate(dateStr){
+  const dayName = DAY_NAMES[new Date(dateStr+'T00:00:00').getDay()];
+  const weekly = cache.routine.filter(r=>r['ধরন']!=='তারিখ' && r['দিন']===dayName);
+  const dated = cache.routine.filter(r=>r['ধরন']==='তারিখ' && r['তারিখ']===dateStr);
+  return [...weekly.map(r=>({r,kind:'সাপ্তাহিক'})), ...dated.map(r=>({r,kind:'তারিখ'}))]
+    .sort((a,b)=>(a.r['সময়']||'').localeCompare(b.r['সময়']||''));
+}
+function isRoutineDoneForDate(item, dateStr){
+  const {r, kind} = item;
+  if(kind==='তারিখ') return r['স্ট্যাটাস']==='সম্পন্ন';
+  return cache.routineLog.some(l=>l['RoutineID']===r['ID'] && l['ইভেন্ট']==='সম্পন্ন' && l['তারিখ']===dateStr);
+}
+function isRoutineCancelledForDate(item){
+  return item.kind==='তারিখ' && item.r['স্ট্যাটাস']==='বাতিল';
+}
+function renderRoutineHistoryFor(dateStr){
+  const body = document.getElementById('rtHistoryBody');
+  if(!dateStr){ body.innerHTML=''; return; }
+  const dayName = DAY_NAMES[new Date(dateStr+'T00:00:00').getDay()];
+  const items = getRoutinesForDate(dateStr);
+
+  const tasksHtml = !items.length ? '<div class="empty">এই তারিখে কোনো কাজ নেই</div>' : `
+    <table class="rt-today-table">
+      <thead><tr><th>সময়</th><th>কাজ</th><th style="text-align:center;">স্ট্যাটাস</th></tr></thead>
+      <tbody>${items.map((item,idx)=>{
+        const {r,kind} = item;
+        const done = isRoutineDoneForDate(item, dateStr);
+        const cancelled = isRoutineCancelledForDate(item);
+        const badge = kind==='তারিখ' ? '<span class="badge bd">তারিখ</span>' : '<span class="badge">সাপ্তাহিক</span>';
+        const statusCell = cancelled
+          ? '<span class="status-pill skip">হবে না</span>'
+          : done
+            ? '<span class="status-pill done">সম্পন্ন</span>'
+            : `<input type="checkbox" class="rt-hist-chk" data-idx="${idx}">`;
+        return `<tr><td>${r['সময়']||'—'}</td><td>${r['কাজ']||''} ${badge}</td><td style="text-align:center;">${statusCell}</td></tr>`;
+      }).join('')}</tbody>
+    </table>`;
+
+  const missed = cache.routineLog.filter(l=>l['ইভেন্ট']==='মিসড' && l['তারিখ']===dateStr);
+  const skipped = cache.routineLog.filter(l=>l['ইভেন্ট']==='বাতিল' && l['তারিখ']===dateStr);
+  const postponedFrom = cache.routineLog.filter(l=>l['ইভেন্ট']==='পিছানো' && l['তারিখ']===dateStr);
+  const postponedTo = cache.routineLog.filter(l=>l['ইভেন্ট']==='পিছানো' && l['নতুন_তারিখ']===dateStr);
+  const section = (title, listItems, renderItem) => !listItems.length ? '' :
+    `<div style="margin-bottom:14px;"><div style="font-weight:600;color:var(--ink);margin-bottom:6px;">${title}</div>${listItems.map(renderItem).join('')}</div>`;
+  let extraHtml = '';
+  extraHtml += section('⚠️ করেননি', missed, l=>`<div class="notice-item">${l['কাজ']}</div>`);
+  extraHtml += section('🚫 বাতিল করেছিলেন', skipped, l=>`<div class="notice-item">${l['কাজ']}</div>`);
+  extraHtml += section('📅 এই তারিখ থেকে পিছিয়েছেন', postponedFrom, l=>`<div class="notice-item">${l['কাজ']} → ${l['নতুন_তারিখ']}${l['নোট']?`<div class="notice-sub">কারণ: ${l['নোট']}</div>`:''}</div>`);
+  extraHtml += section('↪️ এই তারিখের জন্য পেছানো হয়েছিল', postponedTo, l=>`<div class="notice-item">${l['কাজ']} (আগের তারিখ ছিল ${l['তারিখ']})${l['নোট']?`<div class="notice-sub">কারণ: ${l['নোট']}</div>`:''}</div>`);
+
+  body.innerHTML = `<div style="font-weight:600;color:var(--ink);margin-bottom:8px;">${dayName}-এর কাজ</div>` + tasksHtml + extraHtml;
+
+  body.querySelectorAll('.rt-hist-chk').forEach(chk=>{
+    chk.addEventListener('change', async e=>{
+      if(!e.target.checked) return;
+      const item = items[Number(e.target.dataset.idx)];
+      const { r, kind } = item;
+      e.target.disabled = true;
+      try{
+        if(kind==='তারিখ'){
+          await apiPost('রুটিন','update', r['ID'], {'স্ট্যাটাস':'সম্পন্ন'});
+          r['স্ট্যাটাস']='সম্পন্ন';
+        }
+        await logRoutineEvent(r['ID'], r['কাজ'], 'সম্পন্ন', dateStr, '', '');
+        toast('সম্পন্ন হিসেবে চিহ্নিত হলো');
+        renderRoutineHistoryFor(dateStr);
+        updateHeaderLine();
+        if(activeTab==='routine') renderRoutine();
+      }catch(err){
+        toast('হালনাগাদ করা যায়নি');
+        e.target.disabled = false;
+        e.target.checked = false;
+      }
+    });
+  });
+}
+
+/* ---------------- ROUTINE: main render ---------------- */
+function renderRoutine(){
+  const todayName = DAY_NAMES[new Date(todayStr()+'T00:00:00').getDay()];
+  const today = todayStr();
+  const weeklyToday = cache.routine.filter(r=>r['ধরন']!=='তারিখ' && r['দিন']===todayName)
+    .sort((a,b)=>(a['সময়']||'').localeCompare(b['সময়']||''));
+  const dateToday = cache.routine.filter(r=>r['ধরন']==='তারিখ' && r['তারিখ']===today)
+    .sort((a,b)=>(a['সময়']||'').localeCompare(b['সময়']||''));
+
+  const todayRowsHtml = [...weeklyToday.map(r=>({r,kind:'সাপ্তাহিক'})), ...dateToday.map(r=>({r,kind:'তারিখ'}))]
+    .map(({r,kind})=>{
+      const done = r['স্ট্যাটাস']==='সম্পন্ন';
+      const cancelled = r['স্ট্যাটাস']==='বাতিল';
+      const badge = kind==='তারিখ' ? '<span class="badge bd">তারিখ</span>' : '<span class="badge">সাপ্তাহিক</span>';
+      return `<tr data-id="${r['ID']}" data-kind="${kind}">
+        <td>${r['সময়']||'—'}</td>
+        <td>${r['কাজ']||''} ${badge}</td>
+        <td style="text-align:center;">
+          ${kind==='সাপ্তাহিক'
+            ? `<input type="checkbox" class="rt-today-chk" ${done?'checked':''}>`
+            : (cancelled ? '<span class="status-pill skip">হবে না</span>' : done ? '<span class="status-pill done">সম্পন্ন</span>' :
+               `<div style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap;">
+                  <button type="button" class="btn small rt-today-done">✓ সম্পন্ন</button>
+                  <button type="button" class="btn small ghost rt-today-skip">✕ হবে না</button>
+                  <button type="button" class="btn small ghost rt-today-reschedule">📅 অন্য দিন</button>
+                </div>`)}
+        </td>
+      </tr>`;
+    }).join('');
+
+  main.innerHTML = `
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
+        <h2 style="margin:0;">আজকের কাজ — ${todayName}</h2>
+      </div>
+      <p style="font-size:12px;color:var(--muted);margin:4px 0 12px;">${todayName}-এর সাপ্তাহিক কাজ এবং আজকের তারিখে নির্ধারিত কাজ একসাথে</p>
+      ${todayRowsHtml ? `
+        <table class="rt-today-table">
+          <thead><tr><th>সময়</th><th>কাজ</th><th style="text-align:center;">স্ট্যাটাস</th></tr></thead>
+          <tbody>${todayRowsHtml}</tbody>
+        </table>
+      ` : '<div class="empty">আজকের জন্য কোনো কাজ নেই</div>'}
+    </div>
+
+    <div class="card" style="display:flex;gap:10px;flex-wrap:wrap;">
+      <button class="btn" id="openAddRoutineBtn" style="margin-top:0;flex:1;">+ নতুন কাজ যোগ করুন</button>
+      <button class="btn ghost" id="openRoutineHistoryBtn" style="margin-top:0;flex:1;">🕘 ইতিহাস দেখুন</button>
+    </div>
+
+    <div class="card" id="rtDateListWrap"><h2>তারিখ ভিত্তিক কাজ</h2><div id="rtDateList"></div></div>
+    <div class="card" id="rtListWrap"><h2>সাপ্তাহিক রুটিন</h2><div id="rtList"></div></div>
+  `;
+
+  document.getElementById('openAddRoutineBtn').addEventListener('click', openAddRoutineModal);
+  document.getElementById('openRoutineHistoryBtn').addEventListener('click', openRoutineHistory);
+
+  /* today-table quick actions */
+  main.querySelectorAll('.rt-today-chk').forEach(chk=>{
+    chk.addEventListener('change', async e=>{
+      const tr = e.target.closest('tr');
+      const id = tr.dataset.id;
+      const rec = cache.routine.find(x=>x['ID']===id);
+      const status = e.target.checked ? 'সম্পন্ন' : 'বাকি';
+      rec['স্ট্যাটাস'] = status;
+      try{ await apiPost('রুটিন','update', id, {'স্ট্যাটাস':status}); renderRoutine(); }
+      catch(err){ toast('হালনাগাদ করা যায়নি'); }
+    });
+  });
+  main.querySelectorAll('.rt-today-done').forEach(btn=>{
+    btn.addEventListener('click', async e=>{
+      const tr = e.target.closest('tr');
+      const id = tr.dataset.id;
+      const rec = cache.routine.find(x=>x['ID']===id);
+      try{
+        await apiPost('রুটিন','update', id, {'স্ট্যাটাস':'সম্পন্ন'});
+        await logRoutineEvent(id, rec['কাজ'], 'সম্পন্ন', rec['তারিখ'], '', '');
+        rec['স্ট্যাটাস']='সম্পন্ন';
+        renderRoutine(); updateHeaderLine(); toast('সম্পন্ন হিসেবে চিহ্নিত হলো');
+      }catch(err){ toast('হালনাগাদ করা যায়নি'); }
+    });
+  });
+  main.querySelectorAll('.rt-today-skip').forEach(btn=>{
+    btn.addEventListener('click', async e=>{
+      const tr = e.target.closest('tr');
+      const id = tr.dataset.id;
+      const rec = cache.routine.find(x=>x['ID']===id);
+      try{
+        await apiPost('রুটিন','update', id, {'স্ট্যাটাস':'বাতিল'});
+        await logRoutineEvent(id, rec['কাজ'], 'বাতিল', rec['তারিখ'], '', '');
+        rec['স্ট্যাটাস']='বাতিল';
+        renderRoutine(); updateHeaderLine(); toast('কাজটি বাতিল করা হলো');
+      }catch(err){ toast('হালনাগাদ করা যায়নি'); }
+    });
+  });
+
+  main.querySelectorAll('.rt-today-reschedule').forEach(btn=>{
+    btn.addEventListener('click', e=>{
+      const tr = e.target.closest('tr');
+      openRtActionModal(tr.dataset.id, true);
+    });
+  });
+
+  /* ---- তারিখ ভিত্তিক কাজ (one-off, date-specific tasks) ----
+     সবশেষে যোগ করা কাজ সবার উপরে (sheet-এ শেষে যোগ হওয়া মানে array-এর শেষে থাকা, তাই reverse),
+     আর যেসব কাজ ইতিমধ্যে সম্পন্ন/বাতিল হয়ে গেছে সেগুলো এখানে দেখানো হয় না —
+     সেগুলো শিটে থেকে যায় এবং "🕘 ইতিহাস দেখুন"-এ দেখা যাবে। */
+  const dateWrapEl = document.getElementById('rtDateList');
+  const dateItems = cache.routine
+    .filter(r=>r['ধরন']==='তারিখ' && r['স্ট্যাটাস']!=='সম্পন্ন' && r['স্ট্যাটাস']!=='বাতিল')
+    .slice().reverse();
+
+  if(!dateItems.length){
+    dateWrapEl.innerHTML = '<div class="empty">এখনো কোনো তারিখ ভিত্তিক কাজ বাকি নেই</div>';
+  } else {
+    dateWrapEl.innerHTML = `
+      <table class="rt-today-table">
+        <thead><tr><th>তারিখ</th><th>কাজ</th><th style="text-align:center;">অ্যাকশন</th></tr></thead>
+        <tbody>${dateItems.map(r=>{
+          const pCount = getPostponeCount(r['ID']);
+          return `<tr data-id="${r['ID']}">
+            <td>${r['তারিখ']||''}${r['সময়']? `<br><span style="font-size:11px;color:var(--muted)">${r['সময়']}</span>`:''}</td>
+            <td>${r['কাজ']||''}${pCount? `<div class="postpone-meta" style="font-size:11px;">${toBn(pCount)} বার পিছানো হয়েছে</div>`:''}</td>
+            <td style="text-align:center;"><button type="button" class="btn small ghost rt-date-act-btn" data-id="${r['ID']}">⋯</button></td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table>`;
+    dateWrapEl.querySelectorAll('.rt-date-act-btn').forEach(btn=>{
+      btn.addEventListener('click', ()=> openRtActionModal(btn.dataset.id));
+    });
+  }
+
+  /* ---- সাপ্তাহিক রুটিন (recurring weekly, by day-of-week) ---- */
+  const wrap = document.getElementById('rtList');
+  const weeklyItems = cache.routine.filter(r=>r['ধরন']!=='তারিখ');
+  if(!weeklyItems.length){ wrap.innerHTML = '<div class="empty">এখনো কোনো রুটিন যোগ হয়নি</div>'; }
+  DAY_NAMES.forEach(day=>{
+    const items = weeklyItems.filter(r=>r['দিন']===day).sort((a,b)=>(a['সময়']||'').localeCompare(b['সময়']||''));
+    if(!items.length) return;
+    const grp = document.createElement('div');
+    grp.className='day-group';
+    grp.innerHTML = `<h3>${day}</h3>`;
+    items.forEach(r=>{
+      const row = document.createElement('div');
+      row.className = 'task-row' + (r['স্ট্যাটাস']==='সম্পন্ন'?' done':'');
+      row.innerHTML = `
+        <input type="checkbox" ${r['স্ট্যাটাস']==='সম্পন্ন'?'checked':''}>
+        <span class="time">${r['সময়']||''}</span>
+        <span class="t">${r['কাজ']||''}</span>
+        <button class="del">✕</button>`;
+      row.querySelector('input').addEventListener('change', async e=>{
+        const status = e.target.checked?'সম্পন্ন':'বাকি';
+        r['স্ট্যাটাস']=status;
+        try{ await apiPost('রুটিন','update', r['ID'], {'স্ট্যাটাস':status}); renderRoutine(); }
+        catch(err){ toast('হালনাগাদ করা যায়নি'); }
+      });
+      row.querySelector('.del').addEventListener('click', async ()=>{
+        try{ await apiPost('রুটিন','delete', r['ID']); cache.routine = cache.routine.filter(x=>x['ID']!==r['ID']); renderRoutine(); }
+        catch(err){ toast('মুছতে সমস্যা হয়েছে'); }
+      });
+      grp.appendChild(row);
+    });
+    wrap.appendChild(grp);
+  });
+}
+
+/* ---------------- PASSWORD MANAGER ---------------- */
+const PW_MASTER_PASSWORD = "Rai1234"; // চাইলে এখানে বদলে নিন
+let pwPendingViewId = null;
+
+function togglePwFormFields(){
+  const type = document.getElementById('pwType').value;
+  const linkBox = document.getElementById('pwLinkBox');
+  const userBox = document.getElementById('pwUserBox');
+  if(type==='ওয়েবসাইট'){
+    linkBox.style.display='block'; userBox.style.display='block';
+  } else if(type==='ইমেইল'){
+    linkBox.style.display='none'; userBox.style.display='none';
+    document.querySelector('#pwForm [name="লিংক"]').value='';
+    document.querySelector('#pwForm [name="ইউজারনেম"]').value='';
+  } else {
+    linkBox.style.display='none'; userBox.style.display='block';
+  }
+}
+function togglePwVisibility(){
+  const inp = document.getElementById('pwPassInput');
+  const lbl = document.getElementById('pwToggleLbl');
+  const showing = inp.type==='text';
+  inp.type = showing ? 'password' : 'text';
+  lbl.textContent = showing ? 'দেখুন' : 'লুকান';
+}
+
+function renderPassword(){
+  main.innerHTML = `
+    <div class="card">
+      <h2>সংরক্ষিত তালিকা</h2>
+      <input type="text" id="pwSearch" placeholder="নাম দিয়ে খুঁজুন...">
+      <div id="pwList"></div>
+    </div>
+
+    <div class="card">
+      <button class="btn full" id="openPwAddBtn" style="margin-top:0;">➕ নতুন এন্ট্রি যোগ করুন</button>
+    </div>
+  `;
+
+  document.getElementById('openPwAddBtn').addEventListener('click', openPwAddModal);
+  document.getElementById('pwSearch').addEventListener('keyup', renderPwList);
+  renderPwList();
+}
+
+function renderPwList(){
+  const list = document.getElementById('pwList');
+  if(!list) return;
+  const q = (document.getElementById('pwSearch').value||'').toLowerCase();
+  const items = cache.password
+    .filter(p=>!q || (p['নাম']||'').toLowerCase().includes(q) || (p['ধরন']||'').toLowerCase().includes(q))
+    .slice().reverse(); // সবশেষে যোগ করা এন্ট্রি সবার উপরে
+
+  if(!items.length){ list.innerHTML = '<div class="empty">কোনো এন্ট্রি পাওয়া যায়নি</div>'; return; }
+
+  list.innerHTML = '';
+  items.forEach(p=>{
+    const row = document.createElement('div');
+    row.className = 'ledger-row';
+    const badge = `<span class="badge">${p['ধরন']||''}</span>`;
+    row.innerHTML = `
+      <div style="flex:1">
+        <div>${p['নাম']||''} ${badge}</div>
+        <div class="rt-actions">
+          ${p['ধরন']==='ওয়েবসাইট' && p['লিংক'] ? `<button type="button" class="btn small ghost" data-act="link">🔗 লিংক</button>` : ''}
+          <button type="button" class="btn small ghost" data-act="creds">🔑 দেখুন</button>
+          ${p['বিবরণ'] ? `<button type="button" class="btn small ghost" data-act="desc">📝 বিবরণ</button>` : ''}
+        </div>
+      </div>`;
+
+    const linkBtn = row.querySelector('[data-act="link"]');
+    if(linkBtn) linkBtn.addEventListener('click', ()=> window.open(p['লিংক'], '_blank'));
+
+    row.querySelector('[data-act="creds"]').addEventListener('click', ()=> openPwAuth(p['ID'], 'creds'));
+
+    const descBtn = row.querySelector('[data-act="desc"]');
+    if(descBtn) descBtn.addEventListener('click', ()=>{
+      document.getElementById('pwDescBody').textContent = p['বিবরণ']||'';
+      document.getElementById('pwDescModal').classList.add('show');
+    });
+
+    list.appendChild(row);
+  });
+}
+
+/* ---- password manager: add-entry modal (wired once) ---- */
+function openPwAddModal(){
+  document.getElementById('pwForm').reset();
+  togglePwFormFields();
+  document.getElementById('pwAddModal').classList.add('show');
+}
+document.getElementById('pwAddCloseBtn').addEventListener('click', ()=>document.getElementById('pwAddModal').classList.remove('show'));
+document.getElementById('pwForm').addEventListener('submit', async e=>{
+  e.preventDefault();
+  const data = Object.fromEntries(new FormData(e.target).entries());
+  if(!(data['নাম']||'').trim()){ toast('নাম দিন'); return; }
+  if(!data['ধরন']){ toast('ধরন বেছে নিন'); return; }
+  if(!(data['পাসওয়ার্ড']||'').trim()){ toast('পাসওয়ার্ড দিন'); return; }
+  if(data['ধরন']==='ওয়েবসাইট' && !(data['লিংক']||'').trim()){ toast('ওয়েবসাইটের লিংক দিন'); return; }
+  const dup = cache.password.some(p=>(p['নাম']||'').toLowerCase()===data['নাম'].trim().toLowerCase());
+  if(dup){ toast('এই নামে ইতিমধ্যে একটা এন্ট্রি আছে'); return; }
+  try{
+    const res = await apiPost('পাসওয়ার্ড','add', null, data);
+    cache.password.push({...data, ID:res.id});
+    e.target.reset();
+    togglePwFormFields();
+    document.getElementById('pwAddModal').classList.remove('show');
+    renderPwList();
+    toast('যোগ করা হয়েছে');
+  }catch(err){ toast('সংরক্ষণ করা যায়নি'); }
+});
+
+/* ---- master password gate (wired once) ---- */
+let pwPendingAction = 'creds';
+function openPwAuth(id, action){
+  pwPendingViewId = id;
+  pwPendingAction = action || 'creds';
+  document.getElementById('pwAuthInput').value = '';
+  document.getElementById('pwAuthMsg').style.display = 'none';
+  document.getElementById('pwAuthOkBtn').textContent = pwPendingAction==='delete' ? 'মুছুন' : 'দেখুন';
+  document.getElementById('pwAuthModal').classList.add('show');
+  setTimeout(()=>document.getElementById('pwAuthInput').focus(), 50);
+}
+function closePwAuth(){
+  document.getElementById('pwAuthModal').classList.remove('show');
+  pwPendingViewId = null;
+}
+document.getElementById('pwAuthCancelBtn').addEventListener('click', closePwAuth);
+document.getElementById('pwAuthInput').addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('pwAuthOkBtn').click(); });
+document.getElementById('pwAuthOkBtn').addEventListener('click', async ()=>{
+  const val = document.getElementById('pwAuthInput').value;
+  if(val !== PW_MASTER_PASSWORD){
+    document.getElementById('pwAuthMsg').style.display = 'block';
+    return;
+  }
+  const id = pwPendingViewId;
+  const action = pwPendingAction;
+  const p = cache.password.find(x=>x['ID']===id);
+  closePwAuth();
+  if(!p) return;
+
+  if(action === 'delete'){
+    try{
+      await apiPost('পাসওয়ার্ড','delete', id);
+      cache.password = cache.password.filter(x=>x['ID']!==id);
+      renderPwList();
+      toast('মুছে ফেলা হয়েছে');
+    }catch(err){ toast('মুছতে সমস্যা হয়েছে'); }
+    return;
+  }
+
+  const body = document.getElementById('pwCredsBody');
+  body.innerHTML = `
+    ${p['ইউজারনেম'] ? `<div><strong>ইউজারনেম:</strong> ${p['ইউজারনেম']}</div>` : ''}
+    <div><strong>পাসওয়ার্ড:</strong> ${p['পাসওয়ার্ড']||''}</div>
+  `;
+  document.getElementById('pwCredsModal').classList.add('show');
+});
+document.getElementById('pwCredsCloseBtn').addEventListener('click', ()=>document.getElementById('pwCredsModal').classList.remove('show'));
+document.getElementById('pwDescCloseBtn').addEventListener('click', ()=>document.getElementById('pwDescModal').classList.remove('show'));
+
+/* ---------------- SETTINGS ---------------- */
+function renderSettings(){
+  main.innerHTML = `
+    <div class="card">
+      <h2>🧪 তারিখ টেস্ট করুন</h2>
+      <p style="font-size:13px;color:var(--muted);margin:0 0 6px;">আপনার ফোনের আসল তারিখ না বদলিয়ে, অ্যাপ যেন অন্য একটা তারিখকে "আজ" ধরে কাজ করে তা এখানে সেট করতে পারবেন — যেমন মাস বদলালে আয়/খরচ ঠিকমতো ০ থেকে শুরু হয় কিনা যাচাই করতে।</p>
+      <input type="date" id="testDateInput" value="${testDateOverride||''}">
+      <div style="display:flex;gap:8px;">
+        <button class="btn small" id="setTestDate" style="flex:1;">টেস্ট তারিখ সেট করুন</button>
+        <button class="btn ghost small" id="clearTestDate" style="flex:1;">আসল তারিখে ফিরুন</button>
+      </div>
+      ${testDateOverride? `<div class="status-msg ok">এখন টেস্ট তারিখ সক্রিয়: ${testDateOverride}</div>` : ''}
+    </div>
+    <div class="card">
+      <h2>Google Sheet সংযোগ</h2>
+      <label>Apps Script Web App URL</label>
+      <input type="text" id="urlInput" placeholder="https://script.google.com/macros/s/.../exec" value="${API_URL||''}">
+      <button class="btn" id="saveUrl">সংরক্ষণ করে সংযুক্ত করুন</button>
+      <div class="status-msg" id="setMsg"></div>
+    </div>
+    <div class="card">
+      <h2>কীভাবে URL পাবেন</h2>
+      <ol style="font-size:13px;line-height:1.9;padding-left:18px;color:var(--ink-text)">
+        <li>আপনার Google Sheet খুলুন → Extensions → Apps Script</li>
+        <li>দেওয়া <b>Code.gs</b> ফাইলের কোড পেস্ট করে Save করুন</li>
+        <li>Deploy → New deployment → টাইপ বেছে নিন <b>Web app</b></li>
+        <li>Execute as: <b>Me</b>, Who has access: <b>Anyone</b></li>
+        <li>Deploy করুন, অনুমতি দিন (Authorize)</li>
+        <li>যে URL পাবেন (...../exec দিয়ে শেষ) সেটা উপরে বসান</li>
+      </ol>
+    </div>
+  `;
+  document.getElementById('setTestDate').addEventListener('click', async ()=>{
+    const val = document.getElementById('testDateInput').value;
+    if(!val){ toast('একটা তারিখ বেছে নিন'); return; }
+    testDateOverride = val;
+    await localSet('testDateOverride', val);
+    updateHeaderLine();
+    renderSettings();
+    toast('টেস্ট তারিখ সক্রিয় হয়েছে: ' + val);
+  });
+  document.getElementById('clearTestDate').addEventListener('click', async ()=>{
+    testDateOverride = null;
+    await localSet('testDateOverride', null);
+    updateHeaderLine();
+    renderSettings();
+    toast('আসল তারিখে ফেরত এসেছেন');
+  });
+  document.getElementById('saveUrl').addEventListener('click', async ()=>{
+    const url = document.getElementById('urlInput').value.trim();
+    const msg = document.getElementById('setMsg');
+    if(!url){ msg.textContent='URL দিন'; msg.className='status-msg err'; return; }
+    await saveConfig(url);
+    try{
+      await refreshAll();
+      msg.textContent = 'সংযুক্ত হয়েছে ✓'; msg.className='status-msg ok';
+      toast('সংযোগ সফল হয়েছে');
+      setTab('finance');
+    }catch(e){
+      msg.textContent = 'সংযোগ ব্যর্থ — URL চেক করুন'; msg.className='status-msg err';
+    }
+  });
+}
+
+/* ---------------- INIT ---------------- */
+(async function init(){
+  testDateOverride = await localGet('testDateOverride', null);
+  updateHeaderLine();
+  await loadConfig();
+  prayerTimes = await localGet('prayerTimes', prayerTimes);
+  if(API_URL){ await refreshAll(); }
+  updateHeaderLine();
+  render();
+  if(API_URL){
+    detectMissedRoutines().then(()=>{ if(activeTab==='routine') renderRoutine(); });
+  }
+  loadIslamicInfo();
+})();
+
+/* ---------------- PWA: register service worker ---------------- */
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=>{
+    navigator.serviceWorker.register('sw.js').catch(()=>{});
+  });
+}
+</script>
+</body>
+</html>
