@@ -491,6 +491,10 @@
   </div>
 </div>
 
+<!-- Firebase SDK (compat build: works with a plain <script>, no build tools needed) -->
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+
 <script>
 const DAY_NAMES = ['রবিবার','সোমবার','মঙ্গলবার','বুধবার','বৃহস্পতিবার','শুক্রবার','শনিবার'];
 const MONTHS = ['জানুয়ারি','ফেব্রুয়ারি','মার্চ','এপ্রিল','মে','জুন','জুলাই','আগস্ট','সেপ্টেম্বর','অক্টোবর','নভেম্বর','ডিসেম্বর'];
@@ -558,14 +562,41 @@ const DAILY_AMAL = [
   {month:12, day:10, text:'ঈদুল আজহা মোবারক'}
 ];
 
-let API_URL = null;
-let cache = { finance: [], prayer: [], routine: [], routineLog: [], password: [], qaza: [], ledger: [], cash: [] };
+function getCustomAmalTextsForToday(){
+  const todayD = todayStr();
+  return cache.customAmal.filter(a=>{
+    const repeats = a['পুনরাবৃত্তি']===true || a['পুনরাবৃত্তি']==='true';
+    if(repeats){
+      if(!hijriInfo) return false;
+      return Number(a['হিজরি_মাস'])===hijriInfo.month && Number(a['হিজরি_দিন'])===hijriInfo.day;
+    }
+    return a['তারিখ']===todayD;
+  }).map(a=>a['বিবরণ']);
+}
+
+let openPrayerModal = null; // নামাজ পেইজের কোন পপআপ খোলা আছে তা মনে রাখে
+
+const DEFAULT_FIREBASE_CONFIG = {
+  apiKey: "AIzaSyBqnFnZYkyIFvBMKajNtisPL7vzGboIdw8",
+  authDomain: "hisheb-pati.firebaseapp.com",
+  projectId: "hisheb-pati",
+  storageBucket: "hisheb-pati.firebasestorage.app",
+  messagingSenderId: "704661450548",
+  appId: "1:704661450548:web:d408ce979aca400571ff61"
+};
+let firebaseConfig = null;
+let db = null;
+let cache = { finance: [], prayer: [], routine: [], routineLog: [], password: [], qaza: [], ledger: [], cash: [], account: [], transfer: [], customAmal: [], quranConfig: [], quranLog: [] };
 let hijriInfo = null;
 let islamicNoticesHtml = { main:'', more:'' };
 let dailyAmalHtml = '';
 let prayerTimes = { 'ফজর':'05:00','যোহর':'12:30','আসর':'16:00','মাগরিব':'18:15','এশা':'19:45' };
 let currentRakatPrayer = null;
 let testDateOverride = null; // 'YYYY-MM-DD' হলে পুরো অ্যাপ এটাকেই "আজ" ধরে কাজ করবে (শুধু টেস্টের জন্য)
+let finFilter = { cat:'', from:'', to:'', minAmt:'', maxAmt:'', q:'' };
+let ledgerFilter = { name:'', type:'', from:'', to:'', minAmt:'', maxAmt:'' };
+let openFinanceModal = null; // ফিনান্স পেইজের কোন পপআপ খোলা আছে তা মনে রাখে (রি-রেন্ডারের পরও খোলা থাকে)
+let reportPeriod = null; // null হলে ডিফল্ট (চলতি মাস); নাহলে 'YYYY-MM' বা 'YYYY' (সম্পূর্ণ বছর)
 
 /* Google Sheets sometimes silently converts a typed "HH:MM" or "YYYY-MM-DD" value
    into a real Date cell. When that comes back through the API as JSON, Date objects
@@ -680,47 +711,66 @@ async function localSet(key, value){
   }catch(e){}
 }
 
-async function loadConfig(){
-  const url = await localGet('apiUrl', null);
-  API_URL = url;
+/* ---------- Firebase (Firestore) connection ---------- */
+async function initFirebase(cfg){
+  if(firebase.apps && firebase.apps.length){
+    try{ await firebase.app().delete(); }catch(e){}
+  }
+  db = null;
+  firebaseConfig = cfg;
+  firebase.initializeApp(cfg);
+  db = firebase.firestore();
 }
-async function saveConfig(url){
-  await localSet('apiUrl', url);
-  API_URL = url;
+async function loadConfig(){
+  const cfg = await localGet('firebaseConfig', null);
+  if(cfg){
+    try{ await initFirebase(cfg); }catch(e){ console.error('Firebase init ব্যর্থ', e); db = null; }
+  }
+}
+async function saveConfig(cfg){
+  await localSet('firebaseConfig', cfg);
+  await initFirebase(cfg);
 }
 
+/* ---------- parse pasted firebaseConfig snippet (not strict JSON: unquoted keys etc.) ---------- */
+function parseFirebaseConfigInput(raw){
+  let txt = raw.trim();
+  txt = txt.replace(/^\s*(const|let|var)\s+\w+\s*=\s*/,'');
+  txt = txt.replace(/;\s*$/,'');
+  return new Function('"use strict"; return (' + txt + ');')();
+}
+
+/* sheet-name → Firestore collection name; row 'ID' ↔ Firestore document id */
 async function apiGet(sheet){
-  if(!API_URL) throw new Error('URL সেট করা হয়নি');
-  let res;
-  try{ res = await fetch(API_URL + '?sheet=' + encodeURIComponent(sheet)); }
-  catch(e){ throw new Error('সংযোগ ব্যর্থ (ইন্টারনেট/URL চেক করুন)'); }
-  let json;
-  try{ json = await res.json(); }
-  catch(e){ throw new Error('সার্ভার থেকে সঠিক উত্তর আসেনি — Apps Script "Anyone" এক্সেসে Deploy হয়েছে কিনা চেক করুন'); }
-  if(json.status !== 'ok') throw new Error(json.message || 'অজানা সমস্যা');
-  return json.data;
+  if(!db) throw new Error('Firebase কনফিগার করা হয়নি');
+  try{
+    const snap = await db.collection(sheet).get();
+    return snap.docs.map(d=>({ID: d.id, ...d.data()}));
+  }catch(e){ throw new Error('ডাটা লোড ব্যর্থ: ' + e.message); }
 }
 async function apiPost(sheet, action, id, data){
-  if(!API_URL) throw new Error('URL সেট করা হয়নি');
-  let res;
+  if(!db) throw new Error('Firebase কনফিগার করা হয়নি');
   try{
-    res = await fetch(API_URL, {
-      method: 'POST',
-      headers: {'Content-Type':'text/plain;charset=utf-8'},
-      body: JSON.stringify({sheet, action, id, data})
-    });
-  }catch(e){ throw new Error('সংযোগ ব্যর্থ (ইন্টারনেট/URL চেক করুন)'); }
-  let json;
-  try{ json = await res.json(); }
-  catch(e){ throw new Error('সার্ভার থেকে সঠিক উত্তর আসেনি — Apps Script "Anyone" এক্সেসে Deploy হয়েছে কিনা চেক করুন'); }
-  if(json.status !== 'ok') throw new Error(json.message || 'অজানা সমস্যা');
-  return json;
+    if(action === 'add'){
+      const ref = await db.collection(sheet).add(data || {});
+      return {status:'ok', id: ref.id};
+    }
+    if(action === 'update'){
+      await db.collection(sheet).doc(id).update(data || {});
+      return {status:'ok', id};
+    }
+    if(action === 'delete'){
+      await db.collection(sheet).doc(id).delete();
+      return {status:'ok', id};
+    }
+    throw new Error('অজানা action: ' + action);
+  }catch(e){ throw new Error('সংরক্ষণ ব্যর্থ: ' + e.message); }
 }
 
 async function refreshAll(){
-  if(!API_URL) return;
-  const sheets = ['হিসাব','নামাজ','রুটিন','রুটিন_লগ','পাসওয়ার্ড','কাজা','লেনদেন','ক্যাশ'];
-  const keys = ['finance','prayer','routine','routineLog','password','qaza','ledger','cash'];
+  if(!db) return;
+  const sheets = ['হিসাব','নামাজ','রুটিন','রুটিন_লগ','পাসওয়ার্ড','কাজা','লেনদেন','ক্যাশ','অ্যাকাউন্ট','স্থানান্তর','কাস্টম_আমল','কুরআন_কনফিগ','কুরআন_লগ'];
+  const keys = ['finance','prayer','routine','routineLog','password','qaza','ledger','cash','account','transfer','customAmal','quranConfig','quranLog'];
   const results = await Promise.allSettled(sheets.map(s=>apiGet(s)));
   let anyFail = false;
   results.forEach((r,i)=>{
@@ -728,7 +778,7 @@ async function refreshAll(){
     else { anyFail = true; console.error(sheets[i], r.reason); }
   });
   if(anyFail){
-    toast('কিছু ডাটা লোড হয়নি — Code.gs আপডেট করে আবার Deploy করেছেন কিনা চেক করুন');
+    toast('কিছু ডাটা লোড হয়নি — Firebase কনফিগার ও Firestore rules চেক করুন');
   }
 }
 
@@ -746,8 +796,8 @@ document.getElementById('tabs').addEventListener('click', e=>{
 });
 
 function render(){
-  if(!API_URL && activeTab!=='settings'){
-    main.innerHTML = `<div class="banner">শুরু করতে আগে <b>সেটিংস</b> ট্যাবে গিয়ে আপনার Google Apps Script Web App URL বসান।</div>`;
+  if(!db && activeTab!=='settings'){
+    main.innerHTML = `<div class="banner">শুরু করতে আগে <b>সেটিংস</b> ট্যাবে গিয়ে আপনার Firebase কনফিগার বসান।</div>`;
     return;
   }
   if(activeTab==='finance') renderFinance();
@@ -792,6 +842,54 @@ function cashDeltaForLedger(dhoron, lenden, amount){
   if(dhoron==='দেনাদার') return lenden==='বৃদ্ধি' ? -amount : amount;
   if(dhoron==='পাওনাদার') return lenden==='বৃদ্ধি' ? amount : -amount;
   return 0;
+}
+
+/* ---- multiple accounts (ক্যাশ + custom, e.g. ব্যাংক/বিকাশ/নগদ) ---- */
+function getAccountList(){
+  return ['ক্যাশ', ...cache.account.map(a=>(a['নাম']||'').trim()).filter(Boolean)];
+}
+function getAccountBalance(name){
+  if(!name || name==='ক্যাশ') return getCashTotal();
+  const rec = cache.account.find(a=>(a['নাম']||'').trim()===name);
+  return rec ? Number(rec['ব্যালেন্স'])||0 : 0;
+}
+async function applyAccountDelta(name, delta){
+  if(!delta) return;
+  if(!name || name==='ক্যাশ'){ await setCashTotal(getCashTotal()+delta); return; }
+  const rec = cache.account.find(a=>(a['নাম']||'').trim()===name);
+  if(rec){
+    const newBal = (Number(rec['ব্যালেন্স'])||0) + delta;
+    await apiPost('অ্যাকাউন্ট','update', rec['ID'], {'নাম':name,'ব্যালেন্স':newBal});
+    rec['ব্যালেন্স'] = newBal;
+  } else {
+    const res = await apiPost('অ্যাকাউন্ট','add', null, {'নাম':name,'ব্যালেন্স':delta});
+    cache.account.push({ID:res.id,'নাম':name,'ব্যালেন্স':delta});
+  }
+}
+async function addNewAccount(name){
+  name = (name||'').trim();
+  if(!name || name==='ক্যাশ') return;
+  if(cache.account.some(a=>(a['নাম']||'').trim()===name)) return;
+  const res = await apiPost('অ্যাকাউন্ট','add', null, {'নাম':name,'ব্যালেন্স':0});
+  cache.account.push({ID:res.id,'নাম':name,'ব্যালেন্স':0});
+}
+async function renameOrAdjustAccount(name){
+  const cur = getAccountBalance(name);
+  const val = prompt(`"${name}" অ্যাকাউন্টের ব্যালেন্স ঠিক করুন (৳)`, fmtAmt(cur));
+  if(val===null) return;
+  const num = Number(val);
+  if(isNaN(num)){ toast('সঠিক সংখ্যা লিখুন'); return; }
+  const rec = cache.account.find(a=>(a['নাম']||'').trim()===name);
+  if(rec){
+    await apiPost('অ্যাকাউন্ট','update', rec['ID'], {'নাম':name,'ব্যালেন্স':num});
+    rec['ব্যালেন্স'] = num;
+  }
+}
+async function deleteAccount(name){
+  const rec = cache.account.find(a=>(a['নাম']||'').trim()===name);
+  if(!rec) return;
+  await apiPost('অ্যাকাউন্ট','delete', rec['ID']);
+  cache.account = cache.account.filter(a=>a['ID']!==rec['ID']);
 }
 
 function showReceivableList(){
@@ -923,8 +1021,55 @@ function renderFinance(){
     else if(b<-0.005) totalPayable+=-b;
   });
   const cashTotal = getCashTotal();
-  const balanceTotal = cashTotal + totalReceivable - totalPayable;
+  const otherAccountsTotal = cache.account.reduce((s,a)=>s+(Number(a['ব্যালেন্স'])||0),0);
+  const balanceTotal = cashTotal + otherAccountsTotal + totalReceivable - totalPayable;
   const names = [...new Set(cache.ledger.map(r=>(r['নাম']||'').trim()).filter(Boolean))].sort();
+
+  /* মাসিক ট্রেন্ড: গত ৬ মাস */
+  const trendMonths = [];
+  { const base = todayStr().split('-'); const d = new Date(Number(base[0]), Number(base[1])-1, 1);
+    for(let i=5;i>=0;i--){ const t=new Date(d.getFullYear(), d.getMonth()-i, 1); trendMonths.push(t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')); } }
+  const trendData = trendMonths.map(ym=>{
+    let inc=0, exp=0;
+    cache.finance.forEach(r=>{ if((r['তারিখ']||'').slice(0,7)===ym){ const a=Number(r['পরিমাণ'])||0; if(r['ধরন']==='আয়') inc+=a; else if(r['ধরন']==='খরচ') exp+=a; } });
+    return {ym, inc, exp};
+  });
+  const trendMax = Math.max(1, ...trendData.map(t=>Math.max(t.inc,t.exp)));
+
+  /* এই মাসের খরচ — ক্যাটাগরি অনুযায়ী পাই চার্ট */
+  const pieGroups = {};
+  cache.finance.forEach(r=>{
+    if(r['ধরন']==='খরচ' && (r['তারিখ']||'').slice(0,7)===currentYm){
+      const c=(r['ক্যাটাগরি']||'অন্যান্য').trim()||'অন্যান্য';
+      pieGroups[c]=(pieGroups[c]||0)+(Number(r['পরিমাণ'])||0);
+    }
+  });
+  const pieEntries = Object.entries(pieGroups).sort((a,b)=>b[1]-a[1]);
+  const pieTotal = pieEntries.reduce((s,[,v])=>s+v,0);
+  const pieColors = ['#8a9a5b','#c96f4a','#4a90c9','#c9a24a','#9a6fc9','#4ac9a2','#c94a7a','#7a7a7a'];
+  let pieAcc = 0;
+  const pieSlices = pieEntries.map(([cat,val],i)=>{
+    const startPct = pieTotal>0 ? (pieAcc/pieTotal)*100 : 0;
+    pieAcc += val;
+    const endPct = pieTotal>0 ? (pieAcc/pieTotal)*100 : 0;
+    return {cat, val, color: pieColors[i%pieColors.length], startPct, endPct};
+  });
+  const pieGradient = pieSlices.length ? pieSlices.map(s=>`${s.color} ${s.startPct}% ${s.endPct}%`).join(', ') : 'var(--rule) 0% 100%';
+
+  /* দেনা-পাওনা রিমাইন্ডার: প্রত্যাশিত তারিখ পার হয়ে গেছে/আজ, অথচ ব্যালেন্স এখনো বাকি */
+  const todayD = todayStr();
+  const dueReminders = [];
+  Object.entries(balances).forEach(([name,bal])=>{
+    if(Math.abs(bal)<0.005) return;
+    const entriesForName = cache.ledger.filter(r=>(r['নাম']||'').trim()===name && r['লেনদেন']==='বৃদ্ধি' && r['প্রত্যাশিত_তারিখ']);
+    if(!entriesForName.length) return;
+    const latestDue = entriesForName.sort((a,b)=>(b['প্রত্যাশিত_তারিখ']||'').localeCompare(a['প্রত্যাশিত_তারিখ']||''))[0];
+    const due = latestDue['প্রত্যাশিত_তারিখ'];
+    if(due && due<=todayD){
+      dueReminders.push({name, bal, due, overdue: due<todayD, type: bal>0?'receivable':'payable'});
+    }
+  });
+  dueReminders.sort((a,b)=>a.due.localeCompare(b.due));
 
   main.innerHTML = `
     <div class="summary-bar">
@@ -937,7 +1082,35 @@ function renderFinance(){
       <div class="summary-chip" id="receivableChip" style="cursor:pointer;"><div class="lbl">দেনাদার</div><div class="val" style="color:var(--sage)">৳${fmtAmt(totalReceivable)}</div></div>
       <div class="summary-chip" id="payableChip" style="cursor:pointer;"><div class="lbl">পাওনাদার</div><div class="val" style="color:var(--clay)">৳${fmtAmt(totalPayable)}</div></div>
     </div>
+    ${dueReminders.length ? `
+    <div class="card" style="border-color:var(--clay);">
+      <h2>⏰ দেনা-পাওনার রিমাইন্ডার</h2>
+      ${dueReminders.map(r=>`
+        <div class="ledger-row">
+          <div>
+            <span class="person-name" data-name="${r.name}" style="cursor:pointer">${r.name}</span>
+            <div class="ledger-meta">${r.type==='receivable'?'ওর কাছ থেকে পাওনা':'ওকে দিতে হবে'} — ফেরতের কথা ছিল ${r.due} ${r.overdue?'<b style="color:var(--clay)">(মেয়াদ পার হয়ে গেছে)</b>':'(আজ)'}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span class="amt ${r.type==='receivable'?'income':'expense'}">৳${fmtAmt(Math.abs(r.bal))}</span>
+            <button class="btn small ${r.type==='receivable'?'settle-recv-rem':'settle-pay-rem'}" data-name="${r.name}" data-bal="${Math.abs(r.bal)}">${r.type==='receivable'?'গ্রহণ করলাম':'পরিশোধ করলাম'}</button>
+          </div>
+        </div>`).join('')}
+    </div>` : ''}
     <div class="card">
+      <h2>দ্রুত কাজ</h2>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;">
+        <button class="btn small fin-modal-btn" data-modal="newEntryModal">➕ নতুন এন্ট্রি</button>
+        <button class="btn small ghost fin-modal-btn" data-modal="entriesModal">📋 আয়-খরচের এন্ট্রি</button>
+        <button class="btn small ghost fin-modal-btn" data-modal="ledgerModal">🤝 দেনা-পাওনার লেনদেন</button>
+        <button class="btn small ghost fin-modal-btn" data-modal="accountsModal">🏦 অ্যাকাউন্ট</button>
+        <button class="btn small ghost fin-modal-btn" data-modal="transferModal">🔄 স্থানান্তর</button>
+        <button class="btn small ghost fin-modal-btn" data-modal="trendModal">📈 মাসিক ট্রেন্ড</button>
+        <button class="btn small ghost fin-modal-btn" data-modal="pieModal">🥧 পাই চার্ট</button>
+        <button class="btn small ghost fin-modal-btn" data-modal="exportModal">⬇ রিপোর্ট এক্সপোর্ট</button>
+      </div>
+    </div>
+    <div class="modal" id="newEntryModal"><div class="modal-box" style="max-width:520px;">
       <h2>নতুন এন্ট্রি</h2>
       <form id="finForm">
         <div class="row2">
@@ -966,22 +1139,162 @@ function renderFinance(){
             <div><label>লেনদেনের ধরন</label><select name="লেনদেন" id="ledgerSubType"></select></div>
             <div><label>সময়</label><input type="time" name="সময়" id="ledgerTime"></div>
           </div>
+          <label>ফেরতের প্রত্যাশিত তারিখ (ঐচ্ছিক)</label>
+          <input type="date" name="প্রত্যাশিত_তারিখ" id="ledgerDueDate">
         </div>
+
+        <label>অ্যাকাউন্ট</label>
+        <select name="অ্যাকাউন্ট" id="finAccount">${getAccountList().map(a=>`<option value="${a}">${a}</option>`).join('')}</select>
 
         <label>পরিমাণ (৳)</label><input type="number" name="পরিমাণ" step="0.01" required>
         <label>নোট (ঐচ্ছিক)</label><input type="text" name="নোট" placeholder="সংক্ষিপ্ত নোট">
         <button class="btn" type="submit">যোগ করুন</button>
         <div class="status-msg" id="finMsg"></div>
       </form>
-    </div>
-    <div class="card">
-      <h2>সাম্প্রতিক এন্ট্রি</h2>
-      <div id="finList">${rows.length? '' : '<div class="empty">কোনো এন্ট্রি নেই এখনো</div>'}</div>
-    </div>
-    <div class="card">
-      <h2>সাম্প্রতিক দেনা-পাওনা লেনদেন</h2>
-      <div id="ledgerList">${cache.ledger.length? '' : '<div class="empty">কোনো লেনদেন নেই এখনো</div>'}</div>
-    </div>
+      <button class="btn ghost full" data-close-modal="newEntryModal" style="margin-top:10px;">বন্ধ করুন</button>
+    </div></div>
+    <div class="modal" id="entriesModal"><div class="modal-box" style="max-width:520px;">
+      <h2>আয়-খরচের এন্ট্রি (খুঁজুন ও দেখুন)</h2>
+      <div class="row2" style="margin-bottom:8px;">
+        <div><label>ক্যাটাগরি</label><select id="finFilterCat"><option value="">সব ক্যাটাগরি</option></select></div>
+        <div><label>খুঁজুন (নোট)</label><input type="text" id="finFilterQ" placeholder="নোটে খুঁজুন" value="${finFilter.q}"></div>
+      </div>
+      <div class="row2" style="margin-bottom:8px;">
+        <div><label>শুরুর তারিখ</label><input type="date" id="finFilterFrom" value="${finFilter.from}"></div>
+        <div><label>শেষ তারিখ</label><input type="date" id="finFilterTo" value="${finFilter.to}"></div>
+      </div>
+      <div class="row2" style="margin-bottom:8px;">
+        <div><label>সর্বনিম্ন পরিমাণ</label><input type="number" id="finFilterMinAmt" value="${finFilter.minAmt}"></div>
+        <div><label>সর্বোচ্চ পরিমাণ</label><input type="number" id="finFilterMaxAmt" value="${finFilter.maxAmt}"></div>
+      </div>
+      <button class="btn ghost small" id="finFilterClear" style="margin-bottom:10px;">ফিল্টার মুছুন</button>
+      <div id="finList"></div>
+      <button class="btn ghost full" data-close-modal="entriesModal" style="margin-top:10px;">বন্ধ করুন</button>
+    </div></div>
+    <div class="modal" id="ledgerModal"><div class="modal-box" style="max-width:520px;">
+      <h2>দেনা-পাওনার লেনদেন (খুঁজুন ও দেখুন)</h2>
+      <div class="row2" style="margin-bottom:8px;">
+        <div><label>নাম</label><select id="ledgerFilterName"><option value="">সবাই</option>${names.map(n=>`<option value="${n}" ${ledgerFilter.name===n?'selected':''}>${n}</option>`).join('')}</select></div>
+        <div><label>ধরন</label>
+          <select id="ledgerFilterType">
+            <option value="">সব ধরন</option>
+            <option value="দেনাদার" ${ledgerFilter.type==='দেনাদার'?'selected':''}>ধার দিলাম (দেনাদার)</option>
+            <option value="পাওনাদার" ${ledgerFilter.type==='পাওনাদার'?'selected':''}>ধার নিলাম (পাওনাদার)</option>
+          </select>
+        </div>
+      </div>
+      <div class="row2" style="margin-bottom:8px;">
+        <div><label>শুরুর তারিখ</label><input type="date" id="ledgerFilterFrom" value="${ledgerFilter.from}"></div>
+        <div><label>শেষ তারিখ</label><input type="date" id="ledgerFilterTo" value="${ledgerFilter.to}"></div>
+      </div>
+      <div class="row2" style="margin-bottom:8px;">
+        <div><label>সর্বনিম্ন পরিমাণ</label><input type="number" id="ledgerFilterMinAmt" value="${ledgerFilter.minAmt}"></div>
+        <div><label>সর্বোচ্চ পরিমাণ</label><input type="number" id="ledgerFilterMaxAmt" value="${ledgerFilter.maxAmt}"></div>
+      </div>
+      <button class="btn ghost small" id="ledgerFilterClear" style="margin-bottom:10px;">ফিল্টার মুছুন</button>
+      <div id="ledgerList"></div>
+      <button class="btn ghost full" data-close-modal="ledgerModal" style="margin-top:10px;">বন্ধ করুন</button>
+    </div></div>
+    <div class="modal" id="accountsModal"><div class="modal-box" style="max-width:520px;">
+      <h2>🏦 অ্যাকাউন্ট</h2>
+      <div id="accountList">
+        <div class="ledger-row"><span>ক্যাশ</span><span class="amt" style="color:var(--gold)">৳${fmtAmt(cashTotal)}</span></div>
+        ${cache.account.map(a=>`
+          <div class="ledger-row">
+            <span class="acc-name" data-name="${(a['নাম']||'').trim()}" style="cursor:pointer">${a['নাম']||''}</span>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span class="amt">৳${fmtAmt(Number(a['ব্যালেন্স'])||0)}</span>
+              <button class="del" data-name="${(a['নাম']||'').trim()}" title="মুছুন">✕</button>
+            </div>
+          </div>`).join('')}
+      </div>
+      <form id="accountForm" style="margin-top:10px;">
+        <label>নতুন অ্যাকাউন্টের নাম (যেমন: ব্যাংক, বিকাশ, নগদ)</label>
+        <input type="text" name="নাম" required>
+        <button class="btn small" type="submit">যোগ করুন</button>
+      </form>
+      <button class="btn ghost full" data-close-modal="accountsModal" style="margin-top:10px;">বন্ধ করুন</button>
+    </div></div>
+    <div class="modal" id="transferModal"><div class="modal-box" style="max-width:520px;">
+      <h2>🔄 এক অ্যাকাউন্ট থেকে আরেক অ্যাকাউন্টে (উইড্র/জমা)</h2>
+      <p style="font-size:12px;color:var(--muted);margin:0 0 10px;">যেমন: ব্যাংক থেকে টাকা তুলে ক্যাশ করলে, বা ক্যাশ থেকে বিকাশে টাকা ঢুকালে — এখানে দিন। এটা আয়/খরচ হিসেবে গণনা হবে না, শুধু এক অ্যাকাউন্টের টাকা আরেক অ্যাকাউন্টে সরানো হবে।</p>
+      <form id="transferForm">
+        <div class="row2">
+          <div><label>কোথা থেকে</label>
+            <select name="থেকে" id="transferFrom">${getAccountList().map(a=>`<option value="${a}">${a}</option>`).join('')}</select>
+          </div>
+          <div><label>কোথায়</label>
+            <select name="যেখানে" id="transferTo">${getAccountList().map((a,i)=>`<option value="${a}" ${i===1?'selected':''}>${a}</option>`).join('')}</select>
+          </div>
+        </div>
+        <label>পরিমাণ (৳)</label><input type="number" name="পরিমাণ" step="0.01" required>
+        <label>তারিখ</label><input type="date" name="তারিখ" value="${todayStr()}" required>
+        <label>নোট (ঐচ্ছিক)</label><input type="text" name="নোট" placeholder="যেমন: ATM থেকে তোলা">
+        <button class="btn small" type="submit">স্থানান্তর করুন</button>
+        <div class="status-msg" id="transferMsg"></div>
+      </form>
+      <div id="transferList" style="margin-top:12px;">
+        ${cache.transfer.length ? [...cache.transfer].sort((a,b)=>(b['তারিখ']||'').localeCompare(a['তারিখ']||'')).map(t=>`
+          <div class="ledger-row">
+            <div>
+              <div>${t['থেকে']||''} → ${t['যেখানে']||''} ${t['নোট']? '<span class="ledger-meta">— '+t['নোট']+'</span>':''}</div>
+              <div class="ledger-meta">${t['তারিখ']||''}</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span class="amt">৳${fmtAmt(Number(t['পরিমাণ'])||0)}</span>
+              <button class="del" data-id="${t['ID']}" title="মুছুন">✕</button>
+            </div>
+          </div>`).join('') : '<div class="empty">কোনো স্থানান্তর নেই এখনো</div>'}
+      </div>
+      <button class="btn ghost full" data-close-modal="transferModal" style="margin-top:10px;">বন্ধ করুন</button>
+    </div></div>
+    <div class="modal" id="trendModal"><div class="modal-box" style="max-width:520px;">
+      <h2>📈 মাসিক ট্রেন্ড (গত ৬ মাস)</h2>
+      <div style="display:flex;align-items:flex-end;gap:10px;height:160px;padding-top:10px;">
+        ${trendData.map(t=>`
+          <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;height:100%;justify-content:flex-end;">
+            <div style="display:flex;gap:3px;align-items:flex-end;height:130px;">
+              <div title="আয় ৳${fmtAmt(t.inc)}" style="width:10px;background:var(--sage);height:${Math.max(2,(t.inc/trendMax)*130)}px;border-radius:2px 2px 0 0;"></div>
+              <div title="খরচ ৳${fmtAmt(t.exp)}" style="width:10px;background:var(--clay);height:${Math.max(2,(t.exp/trendMax)*130)}px;border-radius:2px 2px 0 0;"></div>
+            </div>
+            <div class="ledger-meta" style="font-size:11px;">${getMonthLabel(t.ym).split(' ')[0].slice(0,3)}</div>
+          </div>`).join('')}
+      </div>
+      <div style="display:flex;gap:14px;margin-top:8px;font-size:12px;">
+        <span><span style="display:inline-block;width:10px;height:10px;background:var(--sage);border-radius:2px;margin-right:4px;"></span>আয়</span>
+        <span><span style="display:inline-block;width:10px;height:10px;background:var(--clay);border-radius:2px;margin-right:4px;"></span>খরচ</span>
+      </div>
+      <button class="btn ghost full" data-close-modal="trendModal" style="margin-top:10px;">বন্ধ করুন</button>
+    </div></div>
+    <div class="modal" id="pieModal"><div class="modal-box" style="max-width:520px;">
+      <h2>🥧 এই মাসের খরচ — ক্যাটাগরি অনুযায়ী</h2>
+      ${pieEntries.length ? `
+      <div style="display:flex;gap:20px;align-items:center;flex-wrap:wrap;">
+        <div style="width:150px;height:150px;border-radius:50%;background:conic-gradient(${pieGradient});flex-shrink:0;"></div>
+        <div style="flex:1;min-width:160px;">
+          ${pieSlices.map(s=>`
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:4px 0;">
+              <span style="display:flex;align-items:center;gap:6px;"><span style="width:10px;height:10px;border-radius:50%;background:${s.color};display:inline-block;"></span>${s.cat}</span>
+              <span class="ledger-meta">৳${fmtAmt(s.val)} (${toBn(pieTotal>0?Math.round((s.val/pieTotal)*100):0)}%)</span>
+            </div>`).join('')}
+        </div>
+      </div>` : '<div class="empty">এই মাসে কোনো খরচ নেই</div>'}
+      <button class="btn ghost full" data-close-modal="pieModal" style="margin-top:10px;">বন্ধ করুন</button>
+    </div></div>
+    <div class="modal" id="exportModal"><div class="modal-box" style="max-width:520px;">
+      <h2>⬇ রিপোর্ট এক্সপোর্ট</h2>
+      <label>সময়কাল</label>
+      <select id="reportPeriodSel">
+        <option value="">চলতি মাস</option>
+        ${trendMonths.slice().reverse().map(ym=>`<option value="${ym}">${getMonthLabel(ym)}</option>`).join('')}
+        <option value="year">চলতি বছর (${toBn(todayStr().slice(0,4))})</option>
+      </select>
+      <div style="display:flex;gap:8px;margin-top:10px;">
+        <button class="btn small" id="exportCsvBtn">CSV ডাউনলোড</button>
+        <button class="btn small ghost" id="exportPdfBtn">🖨️ PDF (প্রিন্ট থেকে সেভ)</button>
+      </div>
+      <button class="btn ghost full" data-close-modal="exportModal" style="margin-top:10px;">বন্ধ করুন</button>
+    </div></div>
   `;
 
   document.getElementById('incomeChip').addEventListener('click', ()=>renderCategoriesView('আয়', currentYm));
@@ -997,6 +1310,19 @@ function renderFinance(){
     try{ await setCashTotal(num); renderFinance(); toast('ক্যাশ হালনাগাদ হয়েছে'); }
     catch(e){ toast('সংরক্ষণ করা যায়নি'); }
   });
+  document.querySelectorAll('.settle-recv-rem').forEach(b=>b.addEventListener('click', ()=>settleReceivable(b.dataset.name, Number(b.dataset.bal))));
+  document.querySelectorAll('.settle-pay-rem').forEach(b=>b.addEventListener('click', ()=>settlePayable(b.dataset.name, Number(b.dataset.bal))));
+  document.querySelectorAll('.person-name').forEach(el=>el.addEventListener('click', ()=>showPersonHistory(el.dataset.name)));
+  document.querySelectorAll('.fin-modal-btn').forEach(b=>b.addEventListener('click', ()=>{
+    openFinanceModal = b.dataset.modal;
+    const m = document.getElementById(openFinanceModal);
+    if(m) m.classList.add('show');
+  }));
+  document.querySelectorAll('[data-close-modal]').forEach(b=>b.addEventListener('click', ()=>{
+    const m = document.getElementById(b.dataset.closeModal);
+    if(m) m.classList.remove('show');
+    openFinanceModal = null;
+  }));
 
   const now = new Date();
   document.getElementById('ledgerTime').value = String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
@@ -1031,66 +1357,139 @@ function renderFinance(){
   updateCategoryOptions();
 
   const list = document.getElementById('finList');
-  rows.forEach(r=>{
-    const div = document.createElement('div');
-    div.className='ledger-row';
-    div.innerHTML = `
-      <div>
-        <div>${r['ক্যাটাগরি']||''} ${r['নোট']? '<span class="ledger-meta">— '+r['নোট']+'</span>':''}</div>
-        <div class="ledger-meta">${r['তারিখ']||''}</div>
-      </div>
-      <div style="display:flex;align-items:center;gap:8px;">
-        <span class="amt ${r['ধরন']==='আয়'?'income':'expense'}">${r['ধরন']==='আয়'?'+':'−'}৳${r['পরিমাণ']}</span>
-        <button class="del" data-id="${r['ID']}" title="মুছুন">✕</button>
-      </div>`;
-    list.appendChild(div);
-  });
-  list.querySelectorAll('.del').forEach(b=>b.addEventListener('click', async ()=>{
-    try{
-      const rec = cache.finance.find(x=>x['ID']===b.dataset.id);
-      await apiPost('হিসাব','delete', b.dataset.id);
-      cache.finance = cache.finance.filter(x=>x['ID']!==b.dataset.id);
-      if(rec){
-        const delta = cashDeltaForFinance(rec['ধরন'], Number(rec['পরিমাণ'])||0);
-        if(delta!==0) await setCashTotal(getCashTotal()-delta);
+  const allCats = [...new Set(cache.finance.map(r=>(r['ক্যাটাগরি']||'').trim()).filter(Boolean))].sort();
+  const catSel = document.getElementById('finFilterCat');
+  catSel.innerHTML = '<option value="">সব ক্যাটাগরি</option>' + allCats.map(c=>`<option value="${c}" ${finFilter.cat===c?'selected':''}>${c}</option>`).join('');
+
+  function filteredFinRows(){
+    return rows.filter(r=>{
+      const amt = Number(r['পরিমাণ'])||0;
+      if(finFilter.cat && (r['ক্যাটাগরি']||'').trim()!==finFilter.cat) return false;
+      if(finFilter.from && (r['তারিখ']||'') < finFilter.from) return false;
+      if(finFilter.to && (r['তারিখ']||'') > finFilter.to) return false;
+      if(finFilter.minAmt!=='' && amt < Number(finFilter.minAmt)) return false;
+      if(finFilter.maxAmt!=='' && amt > Number(finFilter.maxAmt)) return false;
+      if(finFilter.q && !(r['নোট']||'').toLowerCase().includes(finFilter.q.toLowerCase())) return false;
+      return true;
+    });
+  }
+  function renderFinList(){
+    const filtered = filteredFinRows();
+    list.innerHTML = filtered.length ? '' : '<div class="empty">কোনো এন্ট্রি পাওয়া যায়নি</div>';
+    filtered.forEach(r=>{
+      const div = document.createElement('div');
+      div.className='ledger-row';
+      div.innerHTML = `
+        <div>
+          <div>${r['ক্যাটাগরি']||''} ${r['নোট']? '<span class="ledger-meta">— '+r['নোট']+'</span>':''}</div>
+          <div class="ledger-meta">${r['তারিখ']||''}${r['অ্যাকাউন্ট'] && r['অ্যাকাউন্ট']!=='ক্যাশ' ? ' · '+r['অ্যাকাউন্ট'] : ''}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span class="amt ${r['ধরন']==='আয়'?'income':'expense'}">${r['ধরন']==='আয়'?'+':'−'}৳${r['পরিমাণ']}</span>
+          <button class="del" data-id="${r['ID']}" title="মুছুন">✕</button>
+        </div>`;
+      list.appendChild(div);
+    });
+    list.querySelectorAll('.del').forEach(b=>b.addEventListener('click', async ()=>{
+      try{
+        const rec = cache.finance.find(x=>x['ID']===b.dataset.id);
+        await apiPost('হিসাব','delete', b.dataset.id);
+        cache.finance = cache.finance.filter(x=>x['ID']!==b.dataset.id);
+        if(rec){
+          const delta = cashDeltaForFinance(rec['ধরন'], Number(rec['পরিমাণ'])||0);
+          await applyAccountDelta(rec['অ্যাকাউন্ট'], -delta);
+        }
+        renderFinance(); toast('মুছে ফেলা হয়েছে');
       }
-      renderFinance(); toast('মুছে ফেলা হয়েছে');
-    }
-    catch(e){ toast('মুছতে সমস্যা হয়েছে'); }
-  }));
+      catch(e){ toast('মুছতে সমস্যা হয়েছে'); }
+    }));
+  }
+  renderFinList();
+  function onFinFilterChange(){
+    finFilter.cat = document.getElementById('finFilterCat').value;
+    finFilter.from = document.getElementById('finFilterFrom').value;
+    finFilter.to = document.getElementById('finFilterTo').value;
+    finFilter.minAmt = document.getElementById('finFilterMinAmt').value;
+    finFilter.maxAmt = document.getElementById('finFilterMaxAmt').value;
+    finFilter.q = document.getElementById('finFilterQ').value;
+    renderFinList();
+  }
+  ['finFilterCat','finFilterFrom','finFilterTo','finFilterMinAmt','finFilterMaxAmt'].forEach(id=>{
+    document.getElementById(id).addEventListener('change', onFinFilterChange);
+  });
+  document.getElementById('finFilterQ').addEventListener('input', onFinFilterChange);
+  document.getElementById('finFilterClear').addEventListener('click', ()=>{
+    finFilter = { cat:'', from:'', to:'', minAmt:'', maxAmt:'', q:'' };
+    renderFinance();
+  });
 
   const ledgerListEl = document.getElementById('ledgerList');
-  const ledgerRowsSorted = [...cache.ledger].sort((a,b)=> ((b['তারিখ']||'')+(b['সময়']||'')).localeCompare((a['তারিখ']||'')+(a['সময়']||''))).slice(0,20);
-  ledgerRowsSorted.forEach(r=>{
-    const label = r['লেনদেন']==='বৃদ্ধি'
-      ? (r['ধরন']==='দেনাদার' ? 'ধার দিলাম' : 'ধার নিলাম')
-      : (r['ধরন']==='দেনাদার' ? 'ফেরত পেলাম' : 'ফেরত দিলাম');
-    const div = document.createElement('div');
-    div.className='ledger-row';
-    div.innerHTML = `
-      <div>
-        <div>${r['নাম']||''} <span class="ledger-meta">— ${label}</span></div>
-        <div class="ledger-meta">${r['তারিখ']||''} ${r['সময়']||''}</div>
-      </div>
-      <div style="display:flex;align-items:center;gap:8px;">
-        <span class="amt ${r['লেনদেন']==='বৃদ্ধি'?'income':'expense'}">৳${r['পরিমাণ']}</span>
-        <button class="del" data-id="${r['ID']}" title="মুছুন">✕</button>
-      </div>`;
-    ledgerListEl.appendChild(div);
-  });
-  ledgerListEl.querySelectorAll('.del').forEach(b=>b.addEventListener('click', async ()=>{
-    try{
-      const rec = cache.ledger.find(x=>x['ID']===b.dataset.id);
-      await apiPost('লেনদেন','delete', b.dataset.id);
-      cache.ledger = cache.ledger.filter(x=>x['ID']!==b.dataset.id);
-      if(rec){
-        const delta = cashDeltaForLedger(rec['ধরন'], rec['লেনদেন'], Number(rec['পরিমাণ'])||0);
-        if(delta!==0) await setCashTotal(getCashTotal()-delta);
+  function filteredLedgerRows(){
+    return [...cache.ledger]
+      .sort((a,b)=> ((b['তারিখ']||'')+(b['সময়']||'')).localeCompare((a['তারিখ']||'')+(a['সময়']||'')))
+      .filter(r=>{
+        const amt = Number(r['পরিমাণ'])||0;
+        if(ledgerFilter.name && (r['নাম']||'').trim()!==ledgerFilter.name) return false;
+        if(ledgerFilter.type && r['ধরন']!==ledgerFilter.type) return false;
+        if(ledgerFilter.from && (r['তারিখ']||'') < ledgerFilter.from) return false;
+        if(ledgerFilter.to && (r['তারিখ']||'') > ledgerFilter.to) return false;
+        if(ledgerFilter.minAmt!=='' && amt < Number(ledgerFilter.minAmt)) return false;
+        if(ledgerFilter.maxAmt!=='' && amt > Number(ledgerFilter.maxAmt)) return false;
+        return true;
+      });
+  }
+  function renderLedgerList(){
+    const filtered = filteredLedgerRows();
+    const showRows = (ledgerFilter.name||ledgerFilter.type||ledgerFilter.from||ledgerFilter.to||ledgerFilter.minAmt!==''||ledgerFilter.maxAmt!=='') ? filtered : filtered.slice(0,20);
+    ledgerListEl.innerHTML = showRows.length ? '' : '<div class="empty">কোনো লেনদেন পাওয়া যায়নি</div>';
+    showRows.forEach(r=>{
+      const label = r['লেনদেন']==='বৃদ্ধি'
+        ? (r['ধরন']==='দেনাদার' ? 'ধার দিলাম' : 'ধার নিলাম')
+        : (r['ধরন']==='দেনাদার' ? 'ফেরত পেলাম' : 'ফেরত দিলাম');
+      const div = document.createElement('div');
+      div.className='ledger-row';
+      div.innerHTML = `
+        <div>
+          <div>${r['নাম']||''} <span class="ledger-meta">— ${label}</span></div>
+          <div class="ledger-meta">${r['তারিখ']||''} ${r['সময়']||''}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span class="amt ${r['লেনদেন']==='বৃদ্ধি'?'income':'expense'}">৳${r['পরিমাণ']}</span>
+          <button class="del" data-id="${r['ID']}" title="মুছুন">✕</button>
+        </div>`;
+      ledgerListEl.appendChild(div);
+    });
+    ledgerListEl.querySelectorAll('.del').forEach(b=>b.addEventListener('click', async ()=>{
+      try{
+        const rec = cache.ledger.find(x=>x['ID']===b.dataset.id);
+        await apiPost('লেনদেন','delete', b.dataset.id);
+        cache.ledger = cache.ledger.filter(x=>x['ID']!==b.dataset.id);
+        if(rec){
+          const delta = cashDeltaForLedger(rec['ধরন'], rec['লেনদেন'], Number(rec['পরিমাণ'])||0);
+          await applyAccountDelta(rec['অ্যাকাউন্ট'], -delta);
+        }
+        renderFinance(); toast('মুছে ফেলা হয়েছে');
       }
-      renderFinance(); toast('মুছে ফেলা হয়েছে');
-    }
-    catch(e){ toast('মুছতে সমস্যা হয়েছে'); }
-  }));
+      catch(e){ toast('মুছতে সমস্যা হয়েছে'); }
+    }));
+  }
+  renderLedgerList();
+  function onLedgerFilterChange(){
+    ledgerFilter.name = document.getElementById('ledgerFilterName').value;
+    ledgerFilter.type = document.getElementById('ledgerFilterType').value;
+    ledgerFilter.from = document.getElementById('ledgerFilterFrom').value;
+    ledgerFilter.to = document.getElementById('ledgerFilterTo').value;
+    ledgerFilter.minAmt = document.getElementById('ledgerFilterMinAmt').value;
+    ledgerFilter.maxAmt = document.getElementById('ledgerFilterMaxAmt').value;
+    renderLedgerList();
+  }
+  ['ledgerFilterName','ledgerFilterType','ledgerFilterFrom','ledgerFilterTo','ledgerFilterMinAmt','ledgerFilterMaxAmt'].forEach(id=>{
+    document.getElementById(id).addEventListener('change', onLedgerFilterChange);
+  });
+  document.getElementById('ledgerFilterClear').addEventListener('click', ()=>{
+    ledgerFilter = { name:'', type:'', from:'', to:'', minAmt:'', maxAmt:'' };
+    renderFinance();
+  });
 
   document.getElementById('finForm').addEventListener('submit', async e=>{
     e.preventDefault();
@@ -1107,17 +1506,171 @@ function renderFinance(){
         const res = await apiPost('লেনদেন','add', null, data);
         cache.ledger.push({...data, ID:res.id});
         const delta = cashDeltaForLedger(data['ধরন'], data['লেনদেন'], amt);
-        if(delta!==0) await setCashTotal(getCashTotal()+delta);
+        await applyAccountDelta(data['অ্যাকাউন্ট'], delta);
       } else {
         const res = await apiPost('হিসাব','add', null, data);
         cache.finance.push({...data, ID:res.id});
         const delta = cashDeltaForFinance(data['ধরন'], amt);
-        if(delta!==0) await setCashTotal(getCashTotal()+delta);
+        await applyAccountDelta(data['অ্যাকাউন্ট'], delta);
       }
       renderFinance(); toast('যোগ করা হয়েছে');
     }catch(err){ msg.textContent='সংরক্ষণ করা যায়নি: ' + err.message; msg.className='status-msg err'; }
   });
+
+  document.querySelectorAll('#accountList .acc-name').forEach(el=>el.addEventListener('click', async ()=>{
+    try{ await renameOrAdjustAccount(el.dataset.name); renderFinance(); }
+    catch(e){ toast('হালনাগাদ করা যায়নি'); }
+  }));
+  document.querySelectorAll('#accountList .del').forEach(b=>b.addEventListener('click', async ()=>{
+    if(!confirm(`"${b.dataset.name}" অ্যাকাউন্ট মুছে ফেলতে চান?`)) return;
+    try{ await deleteAccount(b.dataset.name); renderFinance(); toast('মুছে ফেলা হয়েছে'); }
+    catch(e){ toast('মুছতে সমস্যা হয়েছে'); }
+  }));
+  document.getElementById('accountForm').addEventListener('submit', async e=>{
+    e.preventDefault();
+    const name = (new FormData(e.target).get('নাম')||'').trim();
+    if(!name){ return; }
+    try{ await addNewAccount(name); renderFinance(); toast('অ্যাকাউন্ট যোগ করা হয়েছে'); }
+    catch(err){ toast('যোগ করা যায়নি'); }
+  });
+
+  document.getElementById('transferForm').addEventListener('submit', async e=>{
+    e.preventDefault();
+    const data = Object.fromEntries(new FormData(e.target).entries());
+    const msg = document.getElementById('transferMsg');
+    const from = data['থেকে'], to = data['যেখানে'];
+    const amt = Number(data['পরিমাণ'])||0;
+    if(from===to){ msg.textContent = 'একই অ্যাকাউন্টে স্থানান্তর করা যাবে না'; msg.className='status-msg err'; return; }
+    if(amt<=0){ msg.textContent = 'সঠিক পরিমাণ দিন'; msg.className='status-msg err'; return; }
+    try{
+      const res = await apiPost('স্থানান্তর','add', null, data);
+      cache.transfer.push({...data, ID:res.id});
+      await applyAccountDelta(from, -amt);
+      await applyAccountDelta(to, amt);
+      renderFinance(); toast('স্থানান্তর সম্পন্ন হয়েছে');
+    }catch(err){ msg.textContent = 'সংরক্ষণ করা যায়নি: ' + err.message; msg.className='status-msg err'; }
+  });
+  document.querySelectorAll('#transferList .del').forEach(b=>b.addEventListener('click', async ()=>{
+    try{
+      const rec = cache.transfer.find(x=>x['ID']===b.dataset.id);
+      if(!rec) return;
+      await apiPost('স্থানান্তর','delete', b.dataset.id);
+      cache.transfer = cache.transfer.filter(x=>x['ID']!==b.dataset.id);
+      const amt = Number(rec['পরিমাণ'])||0;
+      await applyAccountDelta(rec['থেকে'], amt);
+      await applyAccountDelta(rec['যেখানে'], -amt);
+      renderFinance(); toast('মুছে ফেলা হয়েছে');
+    }catch(e){ toast('মুছতে সমস্যা হয়েছে'); }
+  }));
+
+  function reportRangeFilter(period){
+    return cache.finance.filter(r=>{
+      const ym = (r['তারিখ']||'').slice(0,7);
+      if(!period) return ym===currentYm;
+      if(period==='year') return (r['তারিখ']||'').slice(0,4)===todayStr().slice(0,4);
+      return ym===period;
+    }).sort((a,b)=>(a['তারিখ']||'').localeCompare(b['তারিখ']||''));
+  }
+  document.getElementById('exportCsvBtn').addEventListener('click', ()=>{
+    const period = document.getElementById('reportPeriodSel').value;
+    const data = reportRangeFilter(period);
+    if(!data.length){ toast('এই সময়কালে কোনো এন্ট্রি নেই'); return; }
+    const header = ['তারিখ','ধরন','ক্যাটাগরি','পরিমাণ','নোট','অ্যাকাউন্ট'];
+    const csvRows = [header.join(',')];
+    data.forEach(r=>{
+      const vals = header.map(h=>{
+        const v = (r[h]!==undefined && r[h]!==null) ? String(r[h]) : '';
+        return '"' + v.replace(/"/g,'""') + '"';
+      });
+      csvRows.push(vals.join(','));
+    });
+    const csvContent = '\uFEFF' + csvRows.join('\r\n');
+    const blob = new Blob([csvContent], {type:'text/csv;charset=utf-8;'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'hisheb-report-' + (period||currentYm) + '.csv';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(()=>URL.revokeObjectURL(url), 2000);
+  });
+  document.getElementById('exportPdfBtn').addEventListener('click', ()=>{
+    const period = document.getElementById('reportPeriodSel').value;
+    const data = reportRangeFilter(period);
+    if(!data.length){ toast('এই সময়কালে কোনো এন্ট্রি নেই'); return; }
+    try{ printFinanceReport(data, period); }
+    catch(e){ toast('রিপোর্ট তৈরি করা যায়নি'); }
+  });
+
+  if(openFinanceModal){
+    const m = document.getElementById(openFinanceModal);
+    if(m) m.classList.add('show'); else openFinanceModal = null;
+  }
 }
+
+let _printStylesReady = false;
+function ensurePrintStyles(){
+  if(_printStylesReady) return;
+  const style = document.createElement('style');
+  style.id = 'printStyles';
+  style.textContent = `
+    #printReportArea{ display:none; }
+    @media print {
+      body > *:not(#printReportArea){ display:none !important; }
+      #printReportArea{ display:block !important; position:static; background:#fff; color:#000; }
+      #printReportArea table{ width:100%; border-collapse:collapse; }
+      #printReportArea th, #printReportArea td{ padding:6px 8px; border-bottom:1px solid #ccc; font-size:12px; text-align:left; }
+      #printReportArea th:last-child, #printReportArea td:last-child{ text-align:left; }
+      #printReportArea td.amt-col, #printReportArea th.amt-col{ text-align:right; }
+    }
+  `;
+  document.head.appendChild(style);
+  window.addEventListener('afterprint', ()=>{
+    const a = document.getElementById('printReportArea');
+    if(a) a.innerHTML = '';
+  });
+  _printStylesReady = true;
+}
+
+/* বাংলা ঠিক দেখানোর জন্য PDF লাইব্রেরি ব্যবহার না করে ব্রাউজারের নিজস্ব
+   Print → Save as PDF ফিচার ব্যবহার করা হয়েছে — এতে বাংলা লেখা ব্রাউজার যেভাবে
+   দেখায় ঠিক সেভাবেই আসে, আর লেখাও সিলেক্ট/কপি করা যায় */
+function printFinanceReport(rows, period){
+  ensurePrintStyles();
+  let income=0, expense=0;
+  rows.forEach(r=>{ const a=Number(r['পরিমাণ'])||0; if(r['ধরন']==='আয়') income+=a; else if(r['ধরন']==='খরচ') expense+=a; });
+  const title = period ? (period==='year' ? 'বাৎসরিক রিপোর্ট '+todayStr().slice(0,4) : 'মাসিক রিপোর্ট — '+getMonthLabel(period)) : 'মাসিক রিপোর্ট (চলতি মাস)';
+  const rowsHtml = rows.map(r=>`
+    <tr>
+      <td>${r['তারিখ']||''}</td>
+      <td>${r['ধরন']||''}</td>
+      <td>${r['ক্যাটাগরি']||''}</td>
+      <td class="amt-col">৳${fmtAmt(Number(r['পরিমাণ'])||0)}</td>
+      <td>${r['নোট']||''}</td>
+    </tr>`).join('');
+  let area = document.getElementById('printReportArea');
+  if(!area){
+    area = document.createElement('div');
+    area.id = 'printReportArea';
+    document.body.appendChild(area);
+  }
+  area.innerHTML = `
+    <div style="padding:20px;">
+      <h2 style="margin:0 0 4px;">${title}</h2>
+      <div style="font-size:13px;color:#555;margin-bottom:14px;">তৈরি হয়েছে: ${todayStr()}</div>
+      <div style="display:flex;gap:20px;margin-bottom:16px;font-size:14px;">
+        <div><b>মোট আয়:</b> ৳${fmtAmt(income)}</div>
+        <div><b>মোট খরচ:</b> ৳${fmtAmt(expense)}</div>
+        <div><b>নিট:</b> ৳${fmtAmt(income-expense)}</div>
+      </div>
+      <table>
+        <thead><tr>
+          <th>তারিখ</th><th>ধরন</th><th>ক্যাটাগরি</th><th class="amt-col">পরিমাণ</th><th>নোট</th>
+        </tr></thead>
+        <tbody>${rowsHtml || '<tr><td colspan="5" style="text-align:center;">কোনো এন্ট্রি নেই</td></tr>'}</tbody>
+      </table>
+    </div>`;
+  window.print();
+}
+
 
 /* ---- income/expense category grouping ---- */
 function getCategoryFrequency(type){
@@ -1355,15 +1908,97 @@ function renderPrayer(){
   const today = new Date();
   const rec = getTodayPrayerRecord() || {};
   const qazaTotal = getQazaTotal();
+  const combinedAmalTexts = [...(dailyAmalHtml? [dailyAmalHtml] : []), ...getCustomAmalTextsForToday()];
+  const combinedAmalHtml = combinedAmalTexts.join('<br>');
+  const prayerStreak = getPrayerStreak();
+  const stats7 = getPrayerStats(7);
+  const stats30 = getPrayerStats(30);
+  const quranTotal = getQuranTotalPages();
+  const quranBookmark = getQuranBookmark();
+  const quranKhatmCount = getQuranKhatmCount();
+  const quranPct = quranTotal ? Math.min(100, Math.round((quranBookmark/quranTotal)*100)) : 0;
+  const quranStreak = getQuranStreak();
+  const quranHeatmap = getQuranHeatmap(30);
+  const quranHeatmapMax = Math.max(1, ...quranHeatmap.map(h=>h.pages));
+  const quranMonthStats = getQuranMonthStats();
+  const quranRecentLogs = [...cache.quranLog].sort((a,b)=>(b['তারিখ']||'').localeCompare(a['তারিখ']||'')).slice(0,10);
 
   main.innerHTML = `
     <div class="card">
       <div class="islamic-date">${toBn(today.getDate())} ${MONTHS[today.getMonth()]} ${toBn(today.getFullYear())} · ${getBanglaDate(today)}</div>
       <div class="hijri-date">${hijriInfo? '☪ '+toBn(hijriInfo.day)+' '+HIJRI_MONTHS[hijriInfo.month-1]+' '+toBn(hijriInfo.year)+' হিজরি' : 'হিজরি তারিখ লোড হচ্ছে…'}</div>
-      ${dailyAmalHtml? `<div class="amal-of-day">${dailyAmalHtml}</div>` : ''}
+      ${combinedAmalHtml? `<div class="amal-of-day">${combinedAmalHtml}</div>` : ''}
+      <button class="btn ghost small" id="openCustomAmalBtn" style="margin-top:10px;">📿 আমল সেট করুন</button>
       <h2 style="margin-top:14px;">☪ ইসলামিক নোটিশ</h2>
       ${islamicNoticesHtml.main || '<div class="empty">লোড হচ্ছে…</div>'}
       ${islamicNoticesHtml.more? `<div class="notice-toggle" id="moreToggle">▼ আরো ইসলামিক নোটিশ</div><div class="more-notices" id="moreNotices">${islamicNoticesHtml.more}</div>` : ''}
+    </div>
+
+    <div class="modal" id="customAmalModal"><div class="modal-box" style="max-width:460px;">
+      <h3>📿 আমল সেট করুন</h3>
+      <form id="customAmalForm">
+        <label>তারিখ কীভাবে দেবেন</label>
+        <select id="amalDateMode">
+          <option value="gregorian">গ্রেগরিয়ান তারিখ (ক্যালেন্ডার থেকে)</option>
+          <option value="hijri">হিজরি (আরবি) তারিখ — মাস ও দিন সরাসরি</option>
+        </select>
+
+        <div id="amalGregorianFields">
+          <label>তারিখ</label>
+          <input type="date" name="তারিখ" id="customAmalDate" value="${todayStr()}">
+          <label style="display:flex;align-items:center;gap:8px;font-weight:normal;margin-top:8px;">
+            <input type="checkbox" name="পুনরাবৃত্তি" id="customAmalRepeat" style="width:auto;">
+            প্রতি বছর এই (হিজরি) দিনে দেখাও
+          </label>
+        </div>
+
+        <div id="amalHijriFields" style="display:none">
+          <div class="row2">
+            <div><label>হিজরি মাস</label>
+              <select id="amalHijriMonth">${HIJRI_MONTHS.map((m,i)=>`<option value="${i+1}">${m}</option>`).join('')}</select>
+            </div>
+            <div><label>হিজরি দিন</label>
+              <select id="amalHijriDay">${Array.from({length:30},(_,i)=>i+1).map(d=>`<option value="${d}">${toBn(d)}</option>`).join('')}</select>
+            </div>
+          </div>
+          <div class="ledger-meta">হিজরি তারিখ দিলে এটা প্রতি বছর ওই হিজরি দিনে স্বয়ংক্রিয়ভাবে দেখাবে।</div>
+        </div>
+
+        <label>আমলের বিবরণ</label>
+        <textarea name="বিবরণ" rows="3" placeholder="যেমন: এই দিনে রোজা রাখা, ইস্তিগফার বেশি পড়া..." required></textarea>
+        <button class="btn small" type="submit" style="margin-top:12px;">সংরক্ষণ করুন</button>
+        <div class="status-msg" id="customAmalMsg"></div>
+      </form>
+      <div id="customAmalList" style="margin-top:14px;"></div>
+      <button class="btn ghost full" id="customAmalCloseBtn" style="margin-top:10px;">বন্ধ করুন</button>
+    </div></div>
+
+    <div class="card">
+      <h2>🔥 নামাজের ধারাবাহিকতা</h2>
+      <div style="text-align:center;padding:8px 0;">
+        <div style="font-size:36px;font-weight:700;color:var(--gold);">${toBn(prayerStreak)}</div>
+        <div style="font-size:13px;color:var(--muted);">টানা দিন ৫ ওয়াক্ত ফরজ আদায় হয়েছে</div>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:10px;">
+        <div style="flex:1;text-align:center;background:var(--rule);border-radius:8px;padding:10px;">
+          <div style="font-size:20px;font-weight:700;">${toBn(stats7.donePct)}%</div>
+          <div style="font-size:11px;color:var(--muted);">গত ৭ দিন — ফরজ আদায়</div>
+        </div>
+        <div style="flex:1;text-align:center;background:var(--rule);border-radius:8px;padding:10px;">
+          <div style="font-size:20px;font-weight:700;">${toBn(stats7.jamaatPct)}%</div>
+          <div style="font-size:11px;color:var(--muted);">গত ৭ দিন — জামাতে</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:8px;">
+        <div style="flex:1;text-align:center;background:var(--rule);border-radius:8px;padding:10px;">
+          <div style="font-size:20px;font-weight:700;">${toBn(stats30.donePct)}%</div>
+          <div style="font-size:11px;color:var(--muted);">গত ৩০ দিন — ফরজ আদায়</div>
+        </div>
+        <div style="flex:1;text-align:center;background:var(--rule);border-radius:8px;padding:10px;">
+          <div style="font-size:20px;font-weight:700;">${toBn(stats30.jamaatPct)}%</div>
+          <div style="font-size:11px;color:var(--muted);">গত ৩০ দিন — জামাতে</div>
+        </div>
+      </div>
     </div>
 
     <div class="card">
@@ -1387,9 +2022,84 @@ function renderPrayer(){
     </div>
 
     <div class="card">
-      <h2>কুরআন তেলাওয়াত</h2>
-      <input type="text" id="quranNote" placeholder="আজকের তেলাওয়াতের পরিকল্পনা লিখুন" value="${rec['কুরআন']||''}">
-      <button class="btn small" id="quranSaveBtn" style="margin-top:10px;">সংরক্ষণ করুন</button>
+      <h2>📖 কুরআন খতম ট্র্যাকার</h2>
+      ${quranTotal===null ? `
+        <p style="font-size:13px;color:var(--muted);margin-bottom:10px;">শুরু করতে আপনার কুরআনের মোট পৃষ্ঠা সংখ্যা দিন (সাধারণত ৬০৪ পৃষ্ঠা)।</p>
+        <label>মোট পৃষ্ঠা সংখ্যা</label>
+        <input type="number" id="quranTotalInput" placeholder="যেমন: ৬০৪" value="604">
+        <button class="btn" id="quranSetupBtn" style="margin-top:10px;">সংরক্ষণ করুন</button>
+        <div class="status-msg" id="quranSetupMsg"></div>
+      ` : `
+        <div style="text-align:center;margin-bottom:12px;">
+          <div style="font-size:28px;font-weight:700;">${toBn(quranPct)}%</div>
+          <div class="ledger-meta">পড়া হয়েছে ${toBn(quranBookmark)} / ${toBn(quranTotal)} পৃষ্ঠা${quranKhatmCount>0? ' · '+toBn(quranKhatmCount)+' বার খতম সম্পন্ন':''}</div>
+        </div>
+        <div style="background:var(--rule);border-radius:6px;height:10px;overflow:hidden;margin-bottom:14px;">
+          <div style="background:var(--sage);height:100%;width:${quranPct}%;"></div>
+        </div>
+        <div style="display:flex;gap:10px;margin-bottom:14px;">
+          <div style="flex:1;text-align:center;background:var(--rule);border-radius:8px;padding:10px;">
+            <div style="font-size:20px;font-weight:700;">${toBn(quranStreak)}</div>
+            <div style="font-size:11px;color:var(--muted);">টানা দিন পড়া</div>
+          </div>
+          <div style="flex:1;text-align:center;background:var(--rule);border-radius:8px;padding:10px;">
+            <div style="font-size:20px;font-weight:700;">${toBn(quranTotal-quranBookmark)}</div>
+            <div style="font-size:11px;color:var(--muted);">বাকি পৃষ্ঠা</div>
+          </div>
+        </div>
+
+        <form id="quranLogForm">
+          <label>আজকের পড়া (পৃষ্ঠা থেকে — পৃষ্ঠা পর্যন্ত)</label>
+          <div class="row2">
+            <div><input type="number" name="শুরু" placeholder="শুরু" value="${quranBookmark+1}" required></div>
+            <div><input type="number" name="শেষ" placeholder="শেষ" required></div>
+          </div>
+          <button class="btn small" type="submit" style="margin-top:8px;">সংরক্ষণ করুন</button>
+          <div class="status-msg" id="quranLogMsg"></div>
+        </form>
+
+        <div style="margin-top:18px;">
+          <div class="ledger-meta" style="margin-bottom:6px;">গত ৩০ দিন</div>
+          <div style="display:grid;grid-template-columns:repeat(10,1fr);gap:4px;">
+            ${quranHeatmap.map(h=>{
+              const intensity = h.pages===0 ? 0 : Math.min(1, h.pages/quranHeatmapMax);
+              const bg = h.pages===0 ? 'var(--rule)' : `rgba(138,154,91,${(0.25+intensity*0.75).toFixed(2)})`;
+              return `<div title="${h.date}: ${toBn(h.pages)} পৃষ্ঠা" style="aspect-ratio:1;border-radius:4px;background:${bg};display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--muted);">${toBn(h.day)}</div>`;
+            }).join('')}
+          </div>
+        </div>
+
+        <div style="margin-top:16px;display:flex;gap:10px;">
+          <div style="flex:1;text-align:center;background:var(--rule);border-radius:8px;padding:10px;">
+            <div style="font-size:16px;font-weight:700;">${toBn(quranMonthStats.avgPerDay)}</div>
+            <div style="font-size:11px;color:var(--muted);">গড় পৃষ্ঠা/দিন (এই মাসে)</div>
+          </div>
+          <div style="flex:1;text-align:center;background:var(--rule);border-radius:8px;padding:10px;">
+            <div style="font-size:16px;font-weight:700;">${toBn(quranMonthStats.daysRead)}/${toBn(quranMonthStats.totalDaysSoFar)}</div>
+            <div style="font-size:11px;color:var(--muted);">এই মাসে পড়েছেন যত দিন</div>
+          </div>
+        </div>
+        ${quranMonthStats.bestDay ? `<div class="ledger-meta" style="margin-top:8px;text-align:center;">🏆 সেরা দিন: ${quranMonthStats.bestDay.date} — ${toBn(quranMonthStats.bestDay.pages)} পৃষ্ঠা</div>` : ''}
+
+        <div style="margin-top:18px;">
+          <div class="ledger-meta" style="margin-bottom:6px;">সাম্প্রতিক লগ</div>
+          <div id="quranLogList">
+            ${quranRecentLogs.length ? quranRecentLogs.map(l=>`
+              <div class="ledger-row">
+                <div>
+                  <div>পৃষ্ঠা ${toBn(l['শুরু'])} – ${toBn(l['শেষ'])}</div>
+                  <div class="ledger-meta">${l['তারিখ']}</div>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <span class="amt">${toBn(Math.max(0,(Number(l['শেষ'])||0)-(Number(l['শুরু'])||0)+1))} পৃষ্ঠা</span>
+                  <button class="del" data-id="${l['ID']}" title="মুছুন">✕</button>
+                </div>
+              </div>`).join('') : '<div class="empty">এখনো কোনো লগ নেই</div>'}
+          </div>
+        </div>
+
+        <button class="btn ghost small" id="quranResetBtn" style="margin-top:14px;">মোট পৃষ্ঠা বদলান</button>
+      `}
     </div>
 
     <div class="card">
@@ -1440,7 +2150,7 @@ function renderPrayer(){
   if(!rows.length){ hb.innerHTML = `<tr><td colspan="${PRAYERS.length+2}" style="padding:14px;color:var(--muted)">এখনো কোনো ডাটা নেই</td></tr>`; }
   rows.forEach(r=>{
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td class="dt">${r['তারিখ']}</td>${PRAYERS.map(p=>`<td>${badgeFor(r[p])}</td>`).join('')}<td>${r['কুরআন']? '📖':'–'}</td>`;
+    tr.innerHTML = `<td class="dt">${r['তারিখ']}</td>${PRAYERS.map(p=>`<td>${badgeFor(r[p])}</td>`).join('')}<td>${pagesReadOn(r['তারিখ'])>0? '📖':'–'}</td>`;
     tr.style.cursor='pointer';
     tr.addEventListener('click', ()=>showDayDetails(r));
     hb.appendChild(tr);
@@ -1458,14 +2168,122 @@ function renderPrayer(){
     box.style.display = open? 'none':'block';
     moreToggle.textContent = open? '▼ আরো ইসলামিক নোটিশ':'▲ কম দেখুন';
   });
-  document.getElementById('quranSaveBtn').addEventListener('click', async ()=>{
-    const val = document.getElementById('quranNote').value;
-    try{
-      if(rec['ID']){ await apiPost('নামাজ','update', rec['ID'], {'কুরআন': val}); rec['কুরআন']=val; }
-      else { const res = await apiPost('নামাজ','add', null, {'তারিখ':todayStr(),'কুরআন':val}); cache.prayer.push({'তারিখ':todayStr(),'কুরআন':val, ID:res.id}); }
-      toast('সংরক্ষণ করা হয়েছে');
-    }catch(e){ toast('সংরক্ষণ করা যায়নি'); }
+
+  if(quranTotal===null){
+    document.getElementById('quranSetupBtn').addEventListener('click', async ()=>{
+      const val = Number(document.getElementById('quranTotalInput').value);
+      const msg = document.getElementById('quranSetupMsg');
+      if(!val || val<=0){ msg.textContent='সঠিক পৃষ্ঠা সংখ্যা দিন'; msg.className='status-msg err'; return; }
+      try{ await saveQuranConfig(val); renderPrayer(); toast('সংরক্ষণ করা হয়েছে'); }
+      catch(e){ msg.textContent='সংরক্ষণ করা যায়নি'; msg.className='status-msg err'; }
+    });
+  } else {
+    document.getElementById('quranLogForm').addEventListener('submit', async e=>{
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const start = Number(fd.get('শুরু')), end = Number(fd.get('শেষ'));
+      const msg = document.getElementById('quranLogMsg');
+      if(!start || !end || start<1 || end<start){ msg.textContent='সঠিক পৃষ্ঠা রেঞ্জ দিন'; msg.className='status-msg err'; return; }
+      if(quranTotal && end>quranTotal){ msg.textContent='মোট পৃষ্ঠার (' + toBn(quranTotal) + ') বেশি হতে পারবে না'; msg.className='status-msg err'; return; }
+      try{
+        const willComplete = quranTotal && end>=quranTotal;
+        await addQuranLog(start, end);
+        toast(willComplete? 'মুবারকবাদ! খতম সম্পন্ন হয়েছে 🎉' : 'সংরক্ষণ করা হয়েছে');
+        renderPrayer();
+      }catch(err){ msg.textContent='সংরক্ষণ করা যায়নি'; msg.className='status-msg err'; }
+    });
+    document.querySelectorAll('#quranLogList .del').forEach(b=>b.addEventListener('click', async ()=>{
+      try{
+        await deleteQuranLog(b.dataset.id);
+        const remaining = cache.quranLog.map(l=>Number(l['শেষ'])||0);
+        const newBookmark = remaining.length ? Math.max(...remaining) : 0;
+        if(newBookmark !== getQuranBookmark()) await setQuranBookmark(newBookmark, 0);
+        renderPrayer(); toast('মুছে ফেলা হয়েছে');
+      }catch(e){ toast('মুছতে সমস্যা হয়েছে'); }
+    }));
+    document.getElementById('quranResetBtn').addEventListener('click', async ()=>{
+      const val = prompt('মোট পৃষ্ঠা সংখ্যা লিখুন', quranTotal);
+      if(val===null) return;
+      const n = Number(val);
+      if(!n || n<=0){ toast('সঠিক সংখ্যা দিন'); return; }
+      try{ await saveQuranConfig(n); renderPrayer(); toast('হালনাগাদ হয়েছে'); }
+      catch(e){ toast('সংরক্ষণ করা যায়নি'); }
+    });
+  }
+
+  document.getElementById('openCustomAmalBtn').addEventListener('click', ()=>{
+    openPrayerModal = 'customAmalModal';
+    document.getElementById('customAmalModal').classList.add('show');
   });
+  document.getElementById('customAmalCloseBtn').addEventListener('click', ()=>{
+    openPrayerModal = null;
+    document.getElementById('customAmalModal').classList.remove('show');
+  });
+  const amalGregorianFields = document.getElementById('amalGregorianFields');
+  const amalHijriFields = document.getElementById('amalHijriFields');
+  document.getElementById('amalDateMode').addEventListener('change', e=>{
+    const isHijri = e.target.value==='hijri';
+    amalGregorianFields.style.display = isHijri? 'none':'block';
+    amalHijriFields.style.display = isHijri? 'block':'none';
+  });
+  const customAmalListEl = document.getElementById('customAmalList');
+  const sortedCustomAmal = [...cache.customAmal].sort((a,b)=>(b['তারিখ']||'').localeCompare(a['তারিখ']||''));
+  customAmalListEl.innerHTML = sortedCustomAmal.length ? '<div style="font-size:12px;color:var(--muted);margin-bottom:6px;">সংরক্ষিত আমল</div>' : '<div class="empty">এখনো কোনো আমল সেট করা হয়নি</div>';
+  sortedCustomAmal.forEach(a=>{
+    const repeats = a['পুনরাবৃত্তি']===true || a['পুনরাবৃত্তি']==='true';
+    const hijriLabel = repeats ? `প্রতি বছর — হিজরি ${toBn(a['হিজরি_দিন']||'')} ${HIJRI_MONTHS[(Number(a['হিজরি_মাস'])||1)-1]||''}` : (a['তারিখ']||'');
+    const div = document.createElement('div');
+    div.className = 'ledger-row';
+    div.innerHTML = `
+      <div>
+        <div>${a['বিবরণ']||''}</div>
+        <div class="ledger-meta">${hijriLabel}</div>
+      </div>
+      <button class="del" data-id="${a['ID']}" title="মুছুন">✕</button>`;
+    customAmalListEl.appendChild(div);
+  });
+  customAmalListEl.querySelectorAll('.del').forEach(b=>b.addEventListener('click', async ()=>{
+    try{
+      await apiPost('কাস্টম_আমল','delete', b.dataset.id);
+      cache.customAmal = cache.customAmal.filter(x=>x['ID']!==b.dataset.id);
+      renderPrayer(); toast('মুছে ফেলা হয়েছে');
+    }catch(e){ toast('মুছতে সমস্যা হয়েছে'); }
+  }));
+  document.getElementById('customAmalForm').addEventListener('submit', async e=>{
+    e.preventDefault();
+    const mode = document.getElementById('amalDateMode').value;
+    const desc = (new FormData(e.target).get('বিবরণ')||'').trim();
+    const msg = document.getElementById('customAmalMsg');
+    if(!desc){ msg.textContent='আমলের বিবরণ দিন'; msg.className='status-msg err'; return; }
+    msg.textContent = 'সংরক্ষণ করা হচ্ছে…'; msg.className='status-msg';
+    try{
+      let data;
+      if(mode==='hijri'){
+        const hMonth = Number(document.getElementById('amalHijriMonth').value);
+        const hDay = Number(document.getElementById('amalHijriDay').value);
+        data = { 'বিবরণ': desc, 'পুনরাবৃত্তি': true, 'হিজরি_মাস': hMonth, 'হিজরি_দিন': hDay };
+      } else {
+        const dateVal = document.getElementById('customAmalDate').value;
+        const repeat = document.getElementById('customAmalRepeat').checked;
+        if(!dateVal){ msg.textContent='তারিখ দিন'; msg.className='status-msg err'; return; }
+        data = { 'তারিখ': dateVal, 'বিবরণ': desc, 'পুনরাবৃত্তি': repeat };
+        if(repeat){
+          const h = await gregorianToHijri(dateVal);
+          data['হিজরি_মাস'] = parseInt(h.month.number);
+          data['হিজরি_দিন'] = parseInt(h.day);
+        }
+      }
+      const res = await apiPost('কাস্টম_আমল','add', null, data);
+      cache.customAmal.push({...data, ID:res.id});
+      toast('আমল সংরক্ষণ করা হয়েছে');
+      openPrayerModal = 'customAmalModal';
+      renderPrayer();
+    }catch(err){ msg.textContent = 'সংরক্ষণ করা যায়নি — ইন্টারনেট সংযোগ চেক করুন'; msg.className='status-msg err'; }
+  });
+  if(openPrayerModal){
+    const m = document.getElementById(openPrayerModal);
+    if(m) m.classList.add('show'); else openPrayerModal = null;
+  }
 }
 
 function showDayDetails(r){
@@ -1478,7 +2296,8 @@ function showDayDetails(r){
     const items = (PRAYER_DETAILS[p]||[]).filter((it,idx)=>parsed.checks && parsed.checks[idx]).map(it=>it.text);
     html += (parsed.jamaat? 'জামায়াতে আদায়। ':'') + (items.length? items.join(', ') : 'কিছু চেক করা হয়নি') + '</div>';
   });
-  if(r['কুরআন']) html += `<div><b>কুরআন:</b> ${r['কুরআন']}</div>`;
+  const qPages = pagesReadOn(r['তারিখ']);
+  if(qPages>0) html += `<div><b>কুরআন:</b> ${toBn(qPages)} পৃষ্ঠা পড়া হয়েছে</div>`;
   document.getElementById('detailsBody').innerHTML = html;
   document.getElementById('detailsModal').classList.add('show');
 }
@@ -1644,6 +2463,180 @@ async function detectMissedRoutines(){
     await logRoutineEvent(r['ID'], r['কাজ'], 'মিসড', r['তারিখ'], '', '');
     already.add(key);
   }
+}
+
+/* ---- ওয়াক্ত পার হয়ে গেলে, সেই ওয়াক্তের ফরজ না পড়া থাকলে স্বয়ংক্রিয়ভাবে কাজায় যোগ ---- */
+const QAZA_WAQT_ORDER = ['ফজর','যোহর','আসর','মাগরিব','এশা'];
+function fardRakatFor(name){
+  const item = (PRAYER_DETAILS[name]||[]).find(it=>it.cls==='r-farz');
+  return item ? item.rakat : 0;
+}
+function isFarzDone(rec, name){
+  if(!rec) return false;
+  const parsed = parseCell(rec[name]);
+  if(!parsed || !parsed.checks) return false;
+  const idx = PRAYER_DETAILS[name].findIndex(it=>it.cls==='r-farz');
+  return idx>=0 && !!parsed.checks[idx];
+}
+function getPrayerStreak(){
+  let streak = 0;
+  let d = new Date(todayStr()+'T00:00:00');
+  const todayRec = cache.prayer.find(r=>r['তারিখ']===todayStr());
+  const allDoneToday = todayRec && PRAYERS.every(p=>isFarzDone(todayRec,p));
+  if(!allDoneToday) d.setDate(d.getDate()-1);
+  while(true){
+    const ds = todayStr(d);
+    const rec = cache.prayer.find(r=>r['তারিখ']===ds);
+    if(rec && PRAYERS.every(p=>isFarzDone(rec,p))){
+      streak++;
+      d.setDate(d.getDate()-1);
+    } else break;
+  }
+  return streak;
+}
+function getPrayerStats(days){
+  const endDate = new Date(todayStr()+'T00:00:00');
+  let doneCount=0, jamaatCount=0;
+  const total = days*5;
+  for(let i=0;i<days;i++){
+    const d = new Date(endDate); d.setDate(d.getDate()-i);
+    const ds = todayStr(d);
+    const rec = cache.prayer.find(r=>r['তারিখ']===ds);
+    PRAYERS.forEach(p=>{
+      if(isFarzDone(rec,p)) doneCount++;
+      const parsed = rec ? parseCell(rec[p]) : null;
+      if(parsed && parsed.jamaat) jamaatCount++;
+    });
+  }
+  return {
+    donePct: total>0 ? Math.round((doneCount/total)*100) : 0,
+    jamaatPct: total>0 ? Math.round((jamaatCount/total)*100) : 0
+  };
+}
+
+/* ---------------- কুরআন খতম ট্র্যাকার ---------------- */
+function getQuranConfig(){ return cache.quranConfig[0] || null; }
+function getQuranTotalPages(){ const c = getQuranConfig(); return c ? (Number(c['মোট_পৃষ্ঠা'])||0) : null; }
+function getQuranBookmark(){ const c = getQuranConfig(); return c ? (Number(c['বুকমার্ক'])||0) : 0; }
+function getQuranKhatmCount(){ const c = getQuranConfig(); return c ? (Number(c['খতম_সংখ্যা'])||0) : 0; }
+async function saveQuranConfig(totalPages){
+  if(cache.quranConfig[0]){
+    await apiPost('কুরআন_কনফিগ','update', cache.quranConfig[0]['ID'], {'মোট_পৃষ্ঠা': totalPages, 'বুকমার্ক': cache.quranConfig[0]['বুকমার্ক']||0, 'খতম_সংখ্যা': cache.quranConfig[0]['খতম_সংখ্যা']||0});
+    cache.quranConfig[0]['মোট_পৃষ্ঠা'] = totalPages;
+  } else {
+    const res = await apiPost('কুরআন_কনফিগ','add', null, {'মোট_পৃষ্ঠা': totalPages, 'বুকমার্ক': 0, 'খতম_সংখ্যা': 0});
+    cache.quranConfig = [{ID:res.id, 'মোট_পৃষ্ঠা': totalPages, 'বুকমার্ক': 0, 'খতম_সংখ্যা': 0}];
+  }
+}
+async function setQuranBookmark(newVal, khatmDelta){
+  const c = getQuranConfig();
+  if(!c) return;
+  const khatm = (Number(c['খতম_সংখ্যা'])||0) + (khatmDelta||0);
+  await apiPost('কুরআন_কনফিগ','update', c['ID'], {'মোট_পৃষ্ঠা': c['মোট_পৃষ্ঠা'], 'বুকমার্ক': newVal, 'খতম_সংখ্যা': khatm});
+  c['বুকমার্ক'] = newVal;
+  c['খতম_সংখ্যা'] = khatm;
+}
+async function addQuranLog(start, end){
+  const data = { 'তারিখ': todayStr(), 'শুরু': start, 'শেষ': end };
+  const res = await apiPost('কুরআন_লগ','add', null, data);
+  cache.quranLog.push({...data, ID:res.id});
+  const total = getQuranTotalPages();
+  const bm = getQuranBookmark();
+  if(end > bm){
+    if(total && end >= total){ await setQuranBookmark(0, 1); }
+    else { await setQuranBookmark(end, 0); }
+  }
+}
+async function deleteQuranLog(id){
+  await apiPost('কুরআন_লগ','delete', id);
+  cache.quranLog = cache.quranLog.filter(x=>x['ID']!==id);
+}
+function pagesReadOn(dateStr){
+  return cache.quranLog.filter(l=>l['তারিখ']===dateStr).reduce((s,l)=>s+Math.max(0,(Number(l['শেষ'])||0)-(Number(l['শুরু'])||0)+1),0);
+}
+function getQuranStreak(){
+  let streak = 0;
+  let d = new Date(todayStr()+'T00:00:00');
+  if(pagesReadOn(todayStr())===0) d.setDate(d.getDate()-1);
+  while(true){
+    const ds = todayStr(d);
+    if(pagesReadOn(ds)>0){ streak++; d.setDate(d.getDate()-1); }
+    else break;
+  }
+  return streak;
+}
+function getQuranHeatmap(days){
+  const endDate = new Date(todayStr()+'T00:00:00');
+  const out = [];
+  for(let i=days-1;i>=0;i--){
+    const d = new Date(endDate); d.setDate(d.getDate()-i);
+    const ds = todayStr(d);
+    out.push({date: ds, pages: pagesReadOn(ds), day: d.getDate()});
+  }
+  return out;
+}
+function getQuranMonthStats(){
+  const ym = todayStr().slice(0,7);
+  const daysInMonth = new Date(Number(ym.slice(0,4)), Number(ym.slice(5,7)), 0).getDate();
+  const todayDay = Number(todayStr().slice(8,10));
+  let totalPages=0, daysRead=0, best={date:null, pages:0};
+  for(let day=1; day<=todayDay; day++){
+    const ds = ym+'-'+String(day).padStart(2,'0');
+    const p = pagesReadOn(ds);
+    if(p>0){ daysRead++; totalPages+=p; }
+    if(p>best.pages){ best = {date: ds, pages: p}; }
+  }
+  return {
+    avgPerDay: todayDay>0 ? Math.round((totalPages/todayDay)*10)/10 : 0,
+    daysRead, totalDaysSoFar: todayDay, daysInMonth,
+    bestDay: best.pages>0 ? best : null
+  };
+}
+
+function getQazaProcessedFlags(rec){
+  return (rec && parseCell(rec['কাজা_প্রসেসড'])) || {};
+}
+async function detectMissedFardForQaza(){
+  if(!db || getQazaTotal()===null) return; // কাজা হিসাব শুরু করা না থাকলে কিছু হবে না
+  const now = new Date();
+  const nowMinutes = now.getHours()*60 + now.getMinutes();
+  const todayD = todayStr();
+  const yesterdayD = todayStr(new Date(new Date(todayD+'T00:00:00').getTime() - 86400000));
+  const timeToMinutes = t=>{ const [h,m]=t.split(':').map(Number); return h*60+m; };
+
+  async function processIfMissed(rec, dateStr, name){
+    const flags = getQazaProcessedFlags(rec);
+    if(flags[name]) return rec;
+    if(isFarzDone(rec, name)) return rec;
+    const rakat = fardRakatFor(name);
+    if(rakat>0) await setQazaTotal((getQazaTotal()||0) + rakat);
+    const newRec = rec || {'তারিখ':dateStr};
+    flags[name] = true;
+    const val = JSON.stringify(flags);
+    if(newRec['ID']){
+      await apiPost('নামাজ','update', newRec['ID'], {'কাজা_প্রসেসড': val});
+      newRec['কাজা_প্রসেসড'] = val;
+    } else {
+      const res = await apiPost('নামাজ','add', null, {'তারিখ':dateStr, 'কাজা_প্রসেসড': val});
+      newRec['ID'] = res.id; newRec['তারিখ'] = dateStr; newRec['কাজা_প্রসেসড'] = val;
+      cache.prayer.push(newRec);
+    }
+    return newRec;
+  }
+
+  let todayRec = cache.prayer.find(r=>r['তারিখ']===todayD);
+  for(let i=0;i<QAZA_WAQT_ORDER.length-1;i++){
+    const prev = QAZA_WAQT_ORDER[i], next = QAZA_WAQT_ORDER[i+1];
+    const nextTime = prayerTimes[next];
+    if(!nextTime || nowMinutes < timeToMinutes(nextTime)) continue;
+    todayRec = await processIfMissed(todayRec, todayD, prev);
+  }
+  let yesterdayRec = cache.prayer.find(r=>r['তারিখ']===yesterdayD);
+  const fajrTime = prayerTimes['ফজর'];
+  if(fajrTime && nowMinutes >= timeToMinutes(fajrTime)){
+    yesterdayRec = await processIfMissed(yesterdayRec, yesterdayD, 'এশা');
+  }
+  if(activeTab==='prayer') renderPrayer();
 }
 
 /* ---------------- ROUTINE: "নতুন কাজ যোগ করুন" popup (wired once) ---------------- */
@@ -2187,22 +3180,40 @@ function renderSettings(){
       ${testDateOverride? `<div class="status-msg ok">এখন টেস্ট তারিখ সক্রিয়: ${testDateOverride}</div>` : ''}
     </div>
     <div class="card">
-      <h2>Google Sheet সংযোগ</h2>
-      <label>Apps Script Web App URL</label>
-      <input type="text" id="urlInput" placeholder="https://script.google.com/macros/s/.../exec" value="${API_URL||''}">
+      <h2>Firebase সংযোগ</h2>
+      <label>firebaseConfig (Firebase কনসোল থেকে যেভাবে কপি করেছেন, সেভাবেই পেস্ট করুন)</label>
+      <textarea id="fbConfigInput" rows="8" style="font-family:'JetBrains Mono',monospace;font-size:12px;" placeholder='const firebaseConfig = {
+  apiKey: "...",
+  authDomain: "...",
+  projectId: "...",
+  storageBucket: "...",
+  messagingSenderId: "...",
+  appId: "..."
+};'>${JSON.stringify(firebaseConfig || DEFAULT_FIREBASE_CONFIG, null, 2)}</textarea>
       <button class="btn" id="saveUrl">সংরক্ষণ করে সংযুক্ত করুন</button>
       <div class="status-msg" id="setMsg"></div>
     </div>
     <div class="card">
-      <h2>কীভাবে URL পাবেন</h2>
+      <h2>কীভাবে Firebase কনফিগার পাবেন</h2>
       <ol style="font-size:13px;line-height:1.9;padding-left:18px;color:var(--ink-text)">
-        <li>আপনার Google Sheet খুলুন → Extensions → Apps Script</li>
-        <li>দেওয়া <b>Code.gs</b> ফাইলের কোড পেস্ট করে Save করুন</li>
-        <li>Deploy → New deployment → টাইপ বেছে নিন <b>Web app</b></li>
-        <li>Execute as: <b>Me</b>, Who has access: <b>Anyone</b></li>
-        <li>Deploy করুন, অনুমতি দিন (Authorize)</li>
-        <li>যে URL পাবেন (...../exec দিয়ে শেষ) সেটা উপরে বসান</li>
+        <li><a href="https://console.firebase.google.com" target="_blank" rel="noopener">console.firebase.google.com</a> এ গিয়ে <b>Add project</b> দিয়ে একটা নতুন প্রজেক্ট বানান</li>
+        <li>বাম মেনু থেকে <b>Build → Firestore Database</b> → <b>Create database</b> → কাছাকাছি একটা location বেছে <b>Start in test mode</b> দিন</li>
+        <li>প্রজেক্ট সেটিংসে (⚙️ আইকন → Project settings) নিচে <b>Your apps</b> সেকশনে গিয়ে <b>&lt;/&gt; (Web)</b> আইকনে ক্লিক করে একটা অ্যাপ রেজিস্টার করুন</li>
+        <li>এরপর যে <code>firebaseConfig = {...}</code> কোডটা দেখাবে, পুরোটা কপি করে উপরের বক্সে পেস্ট করুন</li>
+        <li>"সংরক্ষণ করে সংযুক্ত করুন" চাপুন</li>
       </ol>
+    </div>
+    <div class="card">
+      <h2>নিরাপত্তা: Firestore Rules</h2>
+      <p style="font-size:13px;color:var(--muted);margin:0 0 6px;">Test mode ৩০ দিন পর নিজে থেকে বন্ধ হয়ে যায়। এরপরও অ্যাপ চালু রাখতে, Firestore → Rules ট্যাবে গিয়ে নিচের rules বসিয়ে Publish করুন। এটা শুধু আপনার নিজের ব্যবহারের জন্য ঠিক আছে (এতে পাসওয়ার্ড এন্ট্রিও থাকে, তাই এই URL/config কারো সাথে শেয়ার করবেন না)।</p>
+      <pre style="background:#1e1e1e;color:#d4d4d4;padding:12px;border-radius:6px;font-size:11px;overflow-x:auto;font-family:'JetBrains Mono',monospace;">rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}</pre>
     </div>
   `;
   document.getElementById('setTestDate').addEventListener('click', async ()=>{
@@ -2222,17 +3233,25 @@ function renderSettings(){
     toast('আসল তারিখে ফেরত এসেছেন');
   });
   document.getElementById('saveUrl').addEventListener('click', async ()=>{
-    const url = document.getElementById('urlInput').value.trim();
+    const btn = document.getElementById('saveUrl');
+    const raw = document.getElementById('fbConfigInput').value.trim();
     const msg = document.getElementById('setMsg');
-    if(!url){ msg.textContent='URL দিন'; msg.className='status-msg err'; return; }
-    await saveConfig(url);
+    if(!raw){ msg.textContent='Firebase কনফিগার পেস্ট করুন'; msg.className='status-msg err'; return; }
+    let cfg;
+    try{ cfg = parseFirebaseConfigInput(raw); }
+    catch(e){ msg.textContent = 'কনফিগার পড়া যায়নি — ঠিক ফরম্যাটে পেস্ট করেছেন কিনা দেখুন'; msg.className='status-msg err'; return; }
+    if(!cfg || !cfg.projectId || !cfg.apiKey){ msg.textContent = 'কনফিগারে apiKey/projectId পাওয়া যায়নি'; msg.className='status-msg err'; return; }
+    if(btn.disabled) return;
+    btn.disabled = true;
     try{
+      await saveConfig(cfg);
       await refreshAll();
       msg.textContent = 'সংযুক্ত হয়েছে ✓'; msg.className='status-msg ok';
       toast('সংযোগ সফল হয়েছে');
       setTab('finance');
     }catch(e){
-      msg.textContent = 'সংযোগ ব্যর্থ — URL চেক করুন'; msg.className='status-msg err';
+      msg.textContent = 'সংযোগ ব্যর্থ — কনফিগার ও Firestore rules চেক করুন'; msg.className='status-msg err';
+      btn.disabled = false;
     }
   });
 }
@@ -2243,11 +3262,13 @@ function renderSettings(){
   updateHeaderLine();
   await loadConfig();
   prayerTimes = await localGet('prayerTimes', prayerTimes);
-  if(API_URL){ await refreshAll(); }
+  if(db){ await refreshAll(); }
   updateHeaderLine();
   render();
-  if(API_URL){
+  if(db){
     detectMissedRoutines().then(()=>{ if(activeTab==='routine') renderRoutine(); });
+    detectMissedFardForQaza();
+    setInterval(detectMissedFardForQaza, 60000);
   }
   loadIslamicInfo();
 })();
