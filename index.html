@@ -575,6 +575,7 @@ function getCustomAmalTextsForToday(){
 }
 
 let openPrayerModal = null; // নামাজ পেইজের কোন পপআপ খোলা আছে তা মনে রাখে
+let notifyEnabled = false; // নামাজের সময়ের নোটিফিকেশন চালু আছে কিনা
 
 const DEFAULT_FIREBASE_CONFIG = {
   apiKey: "AIzaSyBqnFnZYkyIFvBMKajNtisPL7vzGboIdw8",
@@ -2019,10 +2020,12 @@ function renderPrayer(){
       <h2>নামাজের সময় ও ট্র্যাকার</h2>
       <div id="ptList"></div>
       <div class="hint" style="font-size:12px;color:var(--muted);text-align:center;margin-top:6px;">নামাজের নামে ট্যাপ করলে রাকাতের বিস্তারিত চেকলিস্ট খুলবে</div>
+      <button class="btn ${notifyEnabled?'':'ghost'} small" id="notifyToggleBtn" style="margin-top:12px;">${notifyEnabled? '🔔 নোটিফিকেশন চালু আছে' : '🔕 নামাজের নোটিফিকেশন চালু করুন'}</button>
+      <button class="btn ghost small" id="openQuranTrackerBtn" style="margin-top:8px;">📖 কুরআন খতম ট্র্যাকার</button>
     </div>
 
-    <div class="card">
-      <h2>📖 কুরআন খতম ট্র্যাকার</h2>
+    <div class="modal" id="quranTrackerModal"><div class="modal-box" style="max-width:480px;">
+      <h3>📖 কুরআন খতম ট্র্যাকার</h3>
       ${quranTotal===null ? `
         <p style="font-size:13px;color:var(--muted);margin-bottom:10px;">শুরু করতে আপনার কুরআনের মোট পৃষ্ঠা সংখ্যা দিন (সাধারণত ৬০৪ পৃষ্ঠা)।</p>
         <label>মোট পৃষ্ঠা সংখ্যা</label>
@@ -2100,7 +2103,8 @@ function renderPrayer(){
 
         <button class="btn ghost small" id="quranResetBtn" style="margin-top:14px;">মোট পৃষ্ঠা বদলান</button>
       `}
-    </div>
+      <button class="btn ghost full" id="quranTrackerCloseBtn" style="margin-top:14px;">বন্ধ করুন</button>
+    </div></div>
 
     <div class="card">
       <h2>দৈনিক আমল হিস্ট্রি</h2>
@@ -2140,6 +2144,7 @@ function renderPrayer(){
   ptList.querySelectorAll('.pt-time').forEach(el=>el.addEventListener('change', async e=>{
     prayerTimes[e.target.dataset.name] = e.target.value;
     await localSet('prayerTimes', prayerTimes);
+    scheduleAllPrayerNotifications();
     renderPrayer();
   }));
   updatePrayerCountdowns();
@@ -2210,6 +2215,21 @@ function renderPrayer(){
       catch(e){ toast('সংরক্ষণ করা যায়নি'); }
     });
   }
+
+  document.getElementById('notifyToggleBtn').addEventListener('click', async ()=>{
+    if(notifyEnabled){ await disableNotifications(); toast('নোটিফিকেশন বন্ধ করা হয়েছে'); }
+    else{ const ok = await enableNotifications(); if(ok) toast('নোটিফিকেশন চালু হয়েছে'); }
+    renderPrayer();
+  });
+
+  document.getElementById('openQuranTrackerBtn').addEventListener('click', ()=>{
+    openPrayerModal = 'quranTrackerModal';
+    document.getElementById('quranTrackerModal').classList.add('show');
+  });
+  document.getElementById('quranTrackerCloseBtn').addEventListener('click', ()=>{
+    openPrayerModal = null;
+    document.getElementById('quranTrackerModal').classList.remove('show');
+  });
 
   document.getElementById('openCustomAmalBtn').addEventListener('click', ()=>{
     openPrayerModal = 'customAmalModal';
@@ -2302,6 +2322,64 @@ function showDayDetails(r){
   document.getElementById('detailsModal').classList.add('show');
 }
 document.getElementById('detailsCloseBtn').addEventListener('click', ()=>document.getElementById('detailsModal').classList.remove('show'));
+
+/* ---- নামাজের সময়ের নোটিফিকেশন ---- */
+let scheduledNotifyTimeouts = [];
+function clearScheduledNotifications(){
+  scheduledNotifyTimeouts.forEach(id=>clearTimeout(id));
+  scheduledNotifyTimeouts = [];
+}
+async function showPrayerNotification(name){
+  const title = name + '-এর সময় হয়েছে';
+  const options = {
+    body: 'নামাজ আদায়ের সময় হয়ে গেছে — এখনই আদায় করুন।',
+    tag: 'prayer-'+name+'-'+todayStr(),
+    vibrate: [400,200,400,200,400],
+    icon: 'icon-192.png',
+    requireInteraction: true
+  };
+  try{
+    if('serviceWorker' in navigator){
+      const reg = await navigator.serviceWorker.ready;
+      await reg.showNotification(title, options);
+      return;
+    }
+  }catch(e){}
+  try{ new Notification(title, options); }catch(e){}
+}
+function scheduleAllPrayerNotifications(){
+  clearScheduledNotifications();
+  if(!notifyEnabled) return;
+  if(!('Notification' in window) || Notification.permission!=='granted') return;
+  const now = new Date();
+  const nowMs = now.getTime();
+  PRAYERS.forEach(name=>{
+    const t = prayerTimes[name];
+    if(!t) return;
+    const [h,m] = t.split(':').map(Number);
+    const target = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m, 0, 0);
+    const delay = target.getTime() - nowMs;
+    if(delay>1000 && delay < 24*3600*1000){
+      const id = setTimeout(()=>{ showPrayerNotification(name); }, delay);
+      scheduledNotifyTimeouts.push(id);
+    }
+  });
+}
+async function enableNotifications(){
+  if(!('Notification' in window)){ toast('এই ব্রাউজার নোটিফিকেশন সাপোর্ট করে না'); return false; }
+  let perm = Notification.permission;
+  if(perm==='default') perm = await Notification.requestPermission();
+  if(perm!=='granted'){ toast('নোটিফিকেশনের অনুমতি দেওয়া হয়নি'); return false; }
+  notifyEnabled = true;
+  await localSet('notifyEnabled', true);
+  scheduleAllPrayerNotifications();
+  return true;
+}
+async function disableNotifications(){
+  notifyEnabled = false;
+  await localSet('notifyEnabled', false);
+  clearScheduledNotifications();
+}
 
 /* ---- countdown ticking ---- */
 function updatePrayerCountdowns(){
@@ -3262,6 +3340,8 @@ service cloud.firestore {
   updateHeaderLine();
   await loadConfig();
   prayerTimes = await localGet('prayerTimes', prayerTimes);
+  notifyEnabled = await localGet('notifyEnabled', false);
+  if(notifyEnabled && (!('Notification' in window) || Notification.permission!=='granted')) notifyEnabled = false;
   if(db){ await refreshAll(); }
   updateHeaderLine();
   render();
@@ -3270,6 +3350,8 @@ service cloud.firestore {
     detectMissedFardForQaza();
     setInterval(detectMissedFardForQaza, 60000);
   }
+  scheduleAllPrayerNotifications();
+  setInterval(scheduleAllPrayerNotifications, 30*60*1000); // দিন পাল্টালে/দীর্ঘক্ষণ খোলা থাকলে পুনরায় শিডিউল করার জন্য
   loadIslamicInfo();
 })();
 
