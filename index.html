@@ -3506,7 +3506,25 @@ document.getElementById('pwChangeOkBtn').addEventListener('click', async ()=>{
 
 /* ---------------- SETTINGS ---------------- */
 function renderSettings(){
+  const installCardHtml = isRunningStandalone() ? `
+    <div class="card">
+      <h2>📲 অ্যাপ ইনস্টল করা আছে</h2>
+      <p style="font-size:13px;color:var(--muted);margin:0;">এই ডিভাইসে অ্যাপটি ইতিমধ্যে ইনস্টল করা আছে এবং নিজের মতো (স্ট্যান্ডঅ্যালোন) খুলছে।</p>
+    </div>
+  ` : window.__deferredInstallPrompt ? `
+    <div class="card">
+      <h2>📲 অ্যাপ ইনস্টল করুন</h2>
+      <p style="font-size:13px;color:var(--muted);margin:0 0 8px;">হোম স্ক্রিনে যোগ করে ব্রাউজার ছাড়াই আলাদা অ্যাপের মতো খুলতে চাইলে নিচের বাটনে চাপুন।</p>
+      <button class="btn full" id="pwaInstallBtn">এখনই ইনস্টল করুন</button>
+    </div>
+  ` : `
+    <div class="card">
+      <h2>📲 অ্যাপ ইনস্টল করুন</h2>
+      <p style="font-size:13px;color:var(--muted);margin:0;">ইনস্টল অপশন এখনো প্রস্তুত হয়নি। GitHub-এর সোর্স কোড লিংক নয় — GitHub Pages-এ হোস্ট করা আসল লিংকে (https দিয়ে শুরু) ভিজিট করুন, এবং Chrome-এর ঠিকানাবারের ⋮ মেনু থেকে "Install app" / "হোম স্ক্রিনে যোগ করুন" চেপে দেখুন।</p>
+    </div>
+  `;
   main.innerHTML = `
+    ${installCardHtml}
     <div class="card">
       <h2>🧪 তারিখ টেস্ট করুন</h2>
       <p style="font-size:13px;color:var(--muted);margin:0 0 6px;">আপনার ফোনের আসল তারিখ না বদলিয়ে, অ্যাপ যেন অন্য একটা তারিখকে "আজ" ধরে কাজ করে তা এখানে সেট করতে পারবেন — যেমন মাস বদলালে আয়/খরচ ঠিকমতো ০ থেকে শুরু হয় কিনা যাচাই করতে।</p>
@@ -3554,6 +3572,17 @@ service cloud.firestore {
 }</pre>
     </div>
   `;
+  const pwaInstallBtn = document.getElementById('pwaInstallBtn');
+  if(pwaInstallBtn){
+    pwaInstallBtn.addEventListener('click', async ()=>{
+      const promptEvent = window.__deferredInstallPrompt;
+      if(!promptEvent) return;
+      promptEvent.prompt();
+      await promptEvent.userChoice;
+      window.__deferredInstallPrompt = null;
+      renderSettings();
+    });
+  }
   document.getElementById('setTestDate').addEventListener('click', async ()=>{
     const val = document.getElementById('testDateInput').value;
     if(!val){ toast('একটা তারিখ বেছে নিন'); return; }
@@ -3620,6 +3649,25 @@ if('serviceWorker' in navigator){
   window.addEventListener('load', ()=>{
     navigator.serviceWorker.register('sw.js').catch(()=>{});
   });
+}
+
+/* ---------------- PWA: manual install prompt ----------------
+   ব্রাউজার নিজে থেকে ইনস্টল ব্যানার সবসময় দেখায় না (এটা এনগেজমেন্টের
+   উপর নির্ভর করে), তাই beforeinstallprompt ধরে রেখে সেটিংস ট্যাবে
+   একটা "ইনস্টল করুন" বাটন দেখানো হচ্ছে যাতে ব্যবহারকারী চাইলেই ইনস্টল
+   করতে পারেন। */
+window.__deferredInstallPrompt = null;
+window.addEventListener('beforeinstallprompt', (e)=>{
+  e.preventDefault();
+  window.__deferredInstallPrompt = e;
+  if(typeof activeTab!=='undefined' && activeTab==='settings') renderSettings();
+});
+window.addEventListener('appinstalled', ()=>{
+  window.__deferredInstallPrompt = null;
+  if(typeof activeTab!=='undefined' && activeTab==='settings') renderSettings();
+});
+function isRunningStandalone(){
+  return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone===true;
 }
 </script>
 </body>
