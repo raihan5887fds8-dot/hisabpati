@@ -422,8 +422,12 @@
 <!-- password manager: master password gate -->
 <div class="modal" id="pwAuthModal">
   <div class="modal-box">
-    <h3>মাস্টার পাসওয়ার্ড দিন</h3>
+    <h3 id="pwAuthTitle">মাস্টার পাসওয়ার্ড দিন</h3>
+    <div id="pwAuthHint" style="display:none;font-size:12px;color:var(--muted);margin-bottom:8px;">এই পাসওয়ার্ড দিয়েই ভবিষ্যতে আপনার সব এন্ট্রি এনক্রিপ্ট/ডিক্রিপ্ট হবে — ভুলে গেলে পুরনো এন্ট্রি আর দেখা যাবে না, তাই মনে রাখুন।</div>
     <input type="password" id="pwAuthInput" placeholder="••••••••">
+    <div id="pwAuthConfirmWrap" style="display:none;">
+      <input type="password" id="pwAuthConfirmInput" placeholder="আবার লিখুন" style="margin-top:8px;">
+    </div>
     <div class="status-msg err" id="pwAuthMsg" style="display:none;">পাসওয়ার্ড ভুল হয়েছে</div>
     <div style="display:flex;gap:8px;margin-top:10px;">
       <button class="btn" id="pwAuthOkBtn" style="margin-top:0;flex:1;">দেখুন</button>
@@ -447,6 +451,26 @@
     <h3>বিবরণ</h3>
     <div id="pwDescBody" style="font-size:14px;line-height:1.7;white-space:pre-wrap;word-break:break-word;"></div>
     <button class="btn ghost full" id="pwDescCloseBtn" style="margin-top:14px;">বন্ধ করুন</button>
+  </div>
+</div>
+
+<!-- password manager: change master password -->
+<div class="modal" id="pwChangeModal">
+  <div class="modal-box">
+    <h3 id="pwChangeTitle">মাস্টার পাসওয়ার্ড পরিবর্তন করুন</h3>
+    <div id="pwChangeOldWrap">
+      <label>আগের মাস্টার পাসওয়ার্ড</label>
+      <input type="password" id="pwChangeOldInput" placeholder="••••••••">
+    </div>
+    <label>নতুন মাস্টার পাসওয়ার্ড</label>
+    <input type="password" id="pwChangeNewInput" placeholder="••••••••">
+    <label>নতুন পাসওয়ার্ড আবার লিখুন</label>
+    <input type="password" id="pwChangeConfirmInput" placeholder="••••••••">
+    <div class="status-msg err" id="pwChangeMsg" style="display:none;"></div>
+    <div style="display:flex;gap:8px;margin-top:10px;">
+      <button class="btn" id="pwChangeOkBtn" style="margin-top:0;flex:1;">সংরক্ষণ করুন</button>
+      <button class="btn ghost" id="pwChangeCloseBtn" style="margin-top:0;flex:1;">বাতিল</button>
+    </div>
   </div>
 </div>
 
@@ -587,12 +611,13 @@ const DEFAULT_FIREBASE_CONFIG = {
 };
 let firebaseConfig = null;
 let db = null;
-let cache = { finance: [], prayer: [], routine: [], routineLog: [], password: [], qaza: [], ledger: [], cash: [], account: [], transfer: [], customAmal: [], quranConfig: [], quranLog: [] };
+let cache = { finance: [], prayer: [], routine: [], routineLog: [], password: [], qaza: [], ledger: [], cash: [], account: [], transfer: [], customAmal: [], quranConfig: [], quranLog: [], pwConfig: [] };
 let hijriInfo = null;
 let islamicNoticesHtml = { main:'', more:'' };
 let dailyAmalHtml = '';
 let prayerTimes = { 'ফজর':'05:00','যোহর':'12:30','আসর':'16:00','মাগরিব':'18:15','এশা':'19:45' };
 let currentRakatPrayer = null;
+let currentRakatDate = null; // রাকাত-চেকলিস্ট পপআপ কোন তারিখের জন্য খোলা (আজ বা গতকাল)
 let testDateOverride = null; // 'YYYY-MM-DD' হলে পুরো অ্যাপ এটাকেই "আজ" ধরে কাজ করবে (শুধু টেস্টের জন্য)
 let finFilter = { cat:'', from:'', to:'', minAmt:'', maxAmt:'', q:'' };
 let ledgerFilter = { name:'', type:'', from:'', to:'', minAmt:'', maxAmt:'' };
@@ -770,8 +795,8 @@ async function apiPost(sheet, action, id, data){
 
 async function refreshAll(){
   if(!db) return;
-  const sheets = ['হিসাব','নামাজ','রুটিন','রুটিন_লগ','পাসওয়ার্ড','কাজা','লেনদেন','ক্যাশ','অ্যাকাউন্ট','স্থানান্তর','কাস্টম_আমল','কুরআন_কনফিগ','কুরআন_লগ'];
-  const keys = ['finance','prayer','routine','routineLog','password','qaza','ledger','cash','account','transfer','customAmal','quranConfig','quranLog'];
+  const sheets = ['হিসাব','নামাজ','রুটিন','রুটিন_লগ','পাসওয়ার্ড','কাজা','লেনদেন','ক্যাশ','অ্যাকাউন্ট','স্থানান্তর','কাস্টম_আমল','কুরআন_কনফিগ','কুরআন_লগ','পাসওয়ার্ড_কনফিগ'];
+  const keys = ['finance','prayer','routine','routineLog','password','qaza','ledger','cash','account','transfer','customAmal','quranConfig','quranLog','pwConfig'];
   const results = await Promise.allSettled(sheets.map(s=>apiGet(s)));
   let anyFail = false;
   results.forEach((r,i)=>{
@@ -2308,17 +2333,30 @@ function renderPrayer(){
 
 function showDayDetails(r){
   document.getElementById('detailsTitle').textContent = r['তারিখ'];
+  const yesterdayD = todayStr(new Date(new Date(todayStr()+'T00:00:00').getTime() - 86400000));
+  const editable = (r['তারিখ']===todayStr() || r['তারিখ']===yesterdayD);
   let html = '';
   PRAYERS.forEach(p=>{
     const parsed = parseCell(r[p]);
-    html += `<div style="margin-bottom:10px;"><b>${p}</b>: `;
-    if(!parsed){ html += 'তথ্য নেই</div>'; return; }
-    const items = (PRAYER_DETAILS[p]||[]).filter((it,idx)=>parsed.checks && parsed.checks[idx]).map(it=>it.text);
-    html += (parsed.jamaat? 'জামায়াতে আদায়। ':'') + (items.length? items.join(', ') : 'কিছু চেক করা হয়নি') + '</div>';
+    html += `<div style="margin-bottom:10px;display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
+      <div><b>${p}</b>: `;
+    if(!parsed){ html += 'তথ্য নেই'; }
+    else{
+      const items = (PRAYER_DETAILS[p]||[]).filter((it,idx)=>parsed.checks && parsed.checks[idx]).map(it=>it.text);
+      html += (parsed.jamaat? 'জামায়াতে আদায়। ':'') + (items.length? items.join(', ') : 'কিছু চেক করা হয়নি');
+    }
+    html += `</div>${editable? `<button class="btn ghost small edit-past-rakat" data-name="${p}" data-date="${r['তারিখ']}" style="flex-shrink:0;">✎ এডিট</button>` : ''}</div>`;
   });
+  if(!editable) html += `<div class="ledger-meta" style="margin-top:6px;">শুধু আজ বা গতকালের নামাজ এডিট করা যায়</div>`;
   const qPages = pagesReadOn(r['তারিখ']);
   if(qPages>0) html += `<div><b>কুরআন:</b> ${toBn(qPages)} পৃষ্ঠা পড়া হয়েছে</div>`;
   document.getElementById('detailsBody').innerHTML = html;
+  document.getElementById('detailsBody').querySelectorAll('.edit-past-rakat').forEach(b=>{
+    b.addEventListener('click', ()=>{
+      document.getElementById('detailsModal').classList.remove('show');
+      openRakatModal(b.dataset.name, b.dataset.date);
+    });
+  });
   document.getElementById('detailsModal').classList.add('show');
 }
 document.getElementById('detailsCloseBtn').addEventListener('click', ()=>document.getElementById('detailsModal').classList.remove('show'));
@@ -2457,11 +2495,12 @@ document.getElementById('adaSaveBtn').addEventListener('click', async ()=>{
 });
 
 /* ---- rakat checklist modal ---- */
-function openRakatModal(name){
+function openRakatModal(name, dateStr){
   currentRakatPrayer = name;
-  const rec = getTodayPrayerRecord() || {};
+  currentRakatDate = dateStr || todayStr();
+  const rec = cache.prayer.find(r=>r['তারিখ']===currentRakatDate) || {};
   const parsed = parseCell(rec[name]) || { jamaat:false, checks: PRAYER_DETAILS[name].map(()=>false) };
-  document.getElementById('rakatModalTitle').textContent = name;
+  document.getElementById('rakatModalTitle').textContent = name + (currentRakatDate!==todayStr() ? ' — ' + currentRakatDate : '');
   let html = `
     <div class="rakat-row">
       <span>🕌 জামায়াতে আদায় করেছি</span>
@@ -2480,18 +2519,21 @@ function openRakatModal(name){
 document.getElementById('rakatCloseBtn').addEventListener('click', ()=>document.getElementById('rakatModal').classList.remove('show'));
 document.getElementById('rakatSaveBtn').addEventListener('click', async ()=>{
   const name = currentRakatPrayer;
+  const dateStr = currentRakatDate || todayStr();
   const jamaat = document.getElementById('jamaatChk').checked;
   const checks = [...document.querySelectorAll('.rakChk')].map(c=>c.checked);
   const cellVal = JSON.stringify({ jamaat, checks });
 
-  // reduce qaza total by newly-checked nafl rakat (matches reference behaviour)
-  const rec = getTodayPrayerRecord() || {};
+  const rec = cache.prayer.find(r=>r['তারিখ']===dateStr) || {};
   const prevParsed = parseCell(rec[name]) || { checks: PRAYER_DETAILS[name].map(()=>false) };
   let naflDelta = 0;
+  let farzNewlyChecked = false;
+  const farzIdx = PRAYER_DETAILS[name].findIndex(it=>it.cls==='r-farz');
   PRAYER_DETAILS[name].forEach((it,idx)=>{
     const wasChecked = !!prevParsed.checks[idx];
     const isChecked = !!checks[idx];
     if(it.cls==='r-nafl' && isChecked && !wasChecked) naflDelta += it.rakat;
+    if(idx===farzIdx && isChecked && !wasChecked) farzNewlyChecked = true;
   });
 
   try{
@@ -2499,15 +2541,34 @@ document.getElementById('rakatSaveBtn').addEventListener('click', async ()=>{
       await apiPost('নামাজ','update', rec['ID'], {[name]: cellVal});
       rec[name] = cellVal;
     } else {
-      const res = await apiPost('নামাজ','add', null, {'তারিখ':todayStr(), [name]: cellVal});
-      cache.prayer.push({'তারিখ':todayStr(), [name]: cellVal, ID:res.id});
+      const res = await apiPost('নামাজ','add', null, {'তারিখ':dateStr, [name]: cellVal});
+      rec['ID'] = res.id; rec['তারিখ'] = dateStr; rec[name] = cellVal;
+      cache.prayer.push(rec);
     }
     if(naflDelta>0 && getQazaTotal()!==null){
       await setQazaTotal(Math.max(0, getQazaTotal()-naflDelta));
     }
+    // দেরিতে হলেও নামাজটা পড়ে ফরজ টিক দেওয়া হলো — কিন্তু ওয়াক্ত পার হয়ে যাওয়ায় আগেই এটা
+    // স্বয়ংক্রিয়ভাবে কাজায় যোগ হয়ে গিয়ে থাকতে পারে; থাকলে সেটা এখন বাদ দিয়ে দিচ্ছি
+    let reversedQaza = false;
+    if(farzNewlyChecked){
+      const flags = getQazaProcessedFlags(rec);
+      if(flags[name]){
+        const rakat = fardRakatFor(name);
+        if(rakat>0 && getQazaTotal()!==null){
+          await setQazaTotal(Math.max(0, getQazaTotal()-rakat));
+        }
+        flags[name] = false;
+        const flagsVal = JSON.stringify(flags);
+        await apiPost('নামাজ','update', rec['ID'], {'কাজা_প্রসেসড': flagsVal});
+        rec['কাজা_প্রসেসড'] = flagsVal;
+        reversedQaza = true;
+      }
+    }
     document.getElementById('rakatModal').classList.remove('show');
+    document.getElementById('detailsModal').classList.remove('show');
     renderPrayer();
-    toast('সংরক্ষণ করা হয়েছে');
+    toast(reversedQaza ? 'সংরক্ষণ করা হয়েছে — আগে কাজায় যোগ হওয়া এই নামাজটা বাদ দেওয়া হলো ✓' : 'সংরক্ষণ করা হয়েছে');
   }catch(e){ toast('সংরক্ষণ করা যায়নি'); }
 });
 
@@ -2534,12 +2595,33 @@ function getPostponeCount(routineId){
 async function detectMissedRoutines(){
   const today = todayStr();
   const already = new Set(cache.routineLog.filter(l=>l['ইভেন্ট']==='মিসড').map(l=>l['RoutineID']+'|'+l['তারিখ']));
+
+  // তারিখ-ভিত্তিক (date-specific) ওভারডিউ কাজ
   const overdue = cache.routine.filter(r=> r['ধরন']==='তারিখ' && r['স্ট্যাটাস']==='বাকি' && r['তারিখ'] && r['তারিখ']<today);
   for(const r of overdue){
     const key = r['ID']+'|'+r['তারিখ'];
     if(already.has(key)) continue;
     await logRoutineEvent(r['ID'], r['কাজ'], 'মিসড', r['তারিখ'], '', '');
     already.add(key);
+  }
+
+  // সাপ্তাহিক কাজ — গত ৭ দিনের মধ্যে যেসব দিনে করার কথা ছিল অথচ সম্পন্ন/বাতিল কোনোটাই লগ হয়নি
+  const weeklyItems = cache.routine.filter(r=>r['ধরন']!=='তারিখ');
+  const settledKeys = new Set(
+    cache.routineLog
+      .filter(l=>l['ইভেন্ট']==='সম্পন্ন' || l['ইভেন্ট']==='বাতিল')
+      .map(l=>l['RoutineID']+'|'+l['তারিখ'])
+  );
+  for(let i=1;i<=7;i++){
+    const d = new Date(new Date(today+'T00:00:00').getTime() - i*86400000);
+    const ds = todayStr(d);
+    const dayName = DAY_NAMES[d.getDay()];
+    for(const r of weeklyItems.filter(r=>r['দিন']===dayName)){
+      const key = r['ID']+'|'+ds;
+      if(already.has(key) || settledKeys.has(key)) continue;
+      await logRoutineEvent(r['ID'], r['কাজ'], 'মিসড', ds, '', '');
+      already.add(key);
+    }
   }
 }
 
@@ -2854,8 +2936,10 @@ function isRoutineDoneForDate(item, dateStr){
   if(kind==='তারিখ') return r['স্ট্যাটাস']==='সম্পন্ন';
   return cache.routineLog.some(l=>l['RoutineID']===r['ID'] && l['ইভেন্ট']==='সম্পন্ন' && l['তারিখ']===dateStr);
 }
-function isRoutineCancelledForDate(item){
-  return item.kind==='তারিখ' && item.r['স্ট্যাটাস']==='বাতিল';
+function isRoutineCancelledForDate(item, dateStr){
+  const {r, kind} = item;
+  if(kind==='তারিখ') return r['স্ট্যাটাস']==='বাতিল';
+  return cache.routineLog.some(l=>l['RoutineID']===r['ID'] && l['ইভেন্ট']==='বাতিল' && l['তারিখ']===dateStr);
 }
 function renderRoutineHistoryFor(dateStr){
   const body = document.getElementById('rtHistoryBody');
@@ -2869,7 +2953,7 @@ function renderRoutineHistoryFor(dateStr){
       <tbody>${items.map((item,idx)=>{
         const {r,kind} = item;
         const done = isRoutineDoneForDate(item, dateStr);
-        const cancelled = isRoutineCancelledForDate(item);
+        const cancelled = isRoutineCancelledForDate(item, dateStr);
         const badge = kind==='তারিখ' ? '<span class="badge bd">তারিখ</span>' : '<span class="badge">সাপ্তাহিক</span>';
         const statusCell = cancelled
           ? '<span class="status-pill skip">হবে না</span>'
@@ -2930,21 +3014,19 @@ function renderRoutine(){
 
   const todayRowsHtml = [...weeklyToday.map(r=>({r,kind:'সাপ্তাহিক'})), ...dateToday.map(r=>({r,kind:'তারিখ'}))]
     .map(({r,kind})=>{
-      const done = r['স্ট্যাটাস']==='সম্পন্ন';
-      const cancelled = r['স্ট্যাটাস']==='বাতিল';
+      const done = isRoutineDoneForDate({r,kind}, today);
+      const cancelled = isRoutineCancelledForDate({r,kind}, today);
       const badge = kind==='তারিখ' ? '<span class="badge bd">তারিখ</span>' : '<span class="badge">সাপ্তাহিক</span>';
       return `<tr data-id="${r['ID']}" data-kind="${kind}">
         <td>${r['সময়']||'—'}</td>
         <td>${r['কাজ']||''} ${badge}</td>
         <td style="text-align:center;">
-          ${kind==='সাপ্তাহিক'
-            ? `<input type="checkbox" class="rt-today-chk" ${done?'checked':''}>`
-            : (cancelled ? '<span class="status-pill skip">হবে না</span>' : done ? '<span class="status-pill done">সম্পন্ন</span>' :
-               `<div style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap;">
-                  <button type="button" class="btn small rt-today-done">✓ সম্পন্ন</button>
-                  <button type="button" class="btn small ghost rt-today-skip">✕ হবে না</button>
-                  <button type="button" class="btn small ghost rt-today-reschedule">📅 অন্য দিন</button>
-                </div>`)}
+          ${cancelled ? '<span class="status-pill skip">হবে না</span>' : done ? '<span class="status-pill done">সম্পন্ন</span>' :
+             `<div style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap;">
+                <button type="button" class="btn small rt-today-done">✓ সম্পন্ন</button>
+                <button type="button" class="btn small ghost rt-today-skip">✕ ${kind==='সাপ্তাহিক'?'আজ হবে না':'হবে না'}</button>
+                ${kind==='তারিখ' ? '<button type="button" class="btn small ghost rt-today-reschedule">📅 অন্য দিন</button>' : ''}
+              </div>`}
         </td>
       </tr>`;
     }).join('');
@@ -2976,26 +3058,18 @@ function renderRoutine(){
   document.getElementById('openRoutineHistoryBtn').addEventListener('click', openRoutineHistory);
 
   /* today-table quick actions */
-  main.querySelectorAll('.rt-today-chk').forEach(chk=>{
-    chk.addEventListener('change', async e=>{
-      const tr = e.target.closest('tr');
-      const id = tr.dataset.id;
-      const rec = cache.routine.find(x=>x['ID']===id);
-      const status = e.target.checked ? 'সম্পন্ন' : 'বাকি';
-      rec['স্ট্যাটাস'] = status;
-      try{ await apiPost('রুটিন','update', id, {'স্ট্যাটাস':status}); renderRoutine(); }
-      catch(err){ toast('হালনাগাদ করা যায়নি'); }
-    });
-  });
   main.querySelectorAll('.rt-today-done').forEach(btn=>{
     btn.addEventListener('click', async e=>{
       const tr = e.target.closest('tr');
       const id = tr.dataset.id;
+      const kind = tr.dataset.kind;
       const rec = cache.routine.find(x=>x['ID']===id);
       try{
-        await apiPost('রুটিন','update', id, {'স্ট্যাটাস':'সম্পন্ন'});
-        await logRoutineEvent(id, rec['কাজ'], 'সম্পন্ন', rec['তারিখ'], '', '');
-        rec['স্ট্যাটাস']='সম্পন্ন';
+        if(kind==='তারিখ'){
+          await apiPost('রুটিন','update', id, {'স্ট্যাটাস':'সম্পন্ন'});
+          rec['স্ট্যাটাস']='সম্পন্ন';
+        }
+        await logRoutineEvent(id, rec['কাজ'], 'সম্পন্ন', today, '', '');
         renderRoutine(); updateHeaderLine(); toast('সম্পন্ন হিসেবে চিহ্নিত হলো');
       }catch(err){ toast('হালনাগাদ করা যায়নি'); }
     });
@@ -3004,11 +3078,14 @@ function renderRoutine(){
     btn.addEventListener('click', async e=>{
       const tr = e.target.closest('tr');
       const id = tr.dataset.id;
+      const kind = tr.dataset.kind;
       const rec = cache.routine.find(x=>x['ID']===id);
       try{
-        await apiPost('রুটিন','update', id, {'স্ট্যাটাস':'বাতিল'});
-        await logRoutineEvent(id, rec['কাজ'], 'বাতিল', rec['তারিখ'], '', '');
-        rec['স্ট্যাটাস']='বাতিল';
+        if(kind==='তারিখ'){
+          await apiPost('রুটিন','update', id, {'স্ট্যাটাস':'বাতিল'});
+          rec['স্ট্যাটাস']='বাতিল';
+        }
+        await logRoutineEvent(id, rec['কাজ'], 'বাতিল', today, '', '');
         renderRoutine(); updateHeaderLine(); toast('কাজটি বাতিল করা হলো');
       }catch(err){ toast('হালনাগাদ করা যায়নি'); }
     });
@@ -3062,19 +3139,17 @@ function renderRoutine(){
     grp.innerHTML = `<h3>${day}</h3>`;
     items.forEach(r=>{
       const row = document.createElement('div');
-      row.className = 'task-row' + (r['স্ট্যাটাস']==='সম্পন্ন'?' done':'');
+      const isToday = day===todayName;
+      const doneToday = isToday && isRoutineDoneForDate({r,kind:'সাপ্তাহিক'}, today);
+      const cancelledToday = isToday && isRoutineCancelledForDate({r,kind:'সাপ্তাহিক'}, today);
+      row.className = 'task-row' + (doneToday? ' done':'');
       row.innerHTML = `
-        <input type="checkbox" ${r['স্ট্যাটাস']==='সম্পন্ন'?'checked':''}>
         <span class="time">${r['সময়']||''}</span>
         <span class="t">${r['কাজ']||''}</span>
+        ${doneToday? '<span class="status-pill done">আজ সম্পন্ন</span>' : cancelledToday? '<span class="status-pill skip">আজ হবে না</span>' : ''}
         <button class="del">✕</button>`;
-      row.querySelector('input').addEventListener('change', async e=>{
-        const status = e.target.checked?'সম্পন্ন':'বাকি';
-        r['স্ট্যাটাস']=status;
-        try{ await apiPost('রুটিন','update', r['ID'], {'স্ট্যাটাস':status}); renderRoutine(); }
-        catch(err){ toast('হালনাগাদ করা যায়নি'); }
-      });
       row.querySelector('.del').addEventListener('click', async ()=>{
+        if(!confirm(`"${r['কাজ']}" রুটিন থেকে পুরোপুরি মুছে ফেলতে চান?`)) return;
         try{ await apiPost('রুটিন','delete', r['ID']); cache.routine = cache.routine.filter(x=>x['ID']!==r['ID']); renderRoutine(); }
         catch(err){ toast('মুছতে সমস্যা হয়েছে'); }
       });
@@ -3085,8 +3160,87 @@ function renderRoutine(){
 }
 
 /* ---------------- PASSWORD MANAGER ---------------- */
-const PW_MASTER_PASSWORD = "Rai1234"; // চাইলে এখানে বদলে নিন
+/* নিরাপত্তা: কোনো মাস্টার পাসওয়ার্ড কোডে বা ডাটাবেসে সংরক্ষণ করা হয় না।
+   ব্যবহারকারীর দেওয়া মাস্টার পাসওয়ার্ড থেকে ব্রাউজারের নিজস্ব Web Crypto API (PBKDF2 + AES-GCM)
+   দিয়ে একটা এনক্রিপশন কী বানানো হয় (শুধু মেমোরিতে থাকে, রিলোড দিলে হারিয়ে যায়) —
+   আসল পাসওয়ার্ড/ইউজারনেম/বিবরণ Firestore-এ শুধু এনক্রিপ্টেড অবস্থায় জমা থাকে। */
+let pwSessionKey = null; // চলতি সেশনে আনলক করা এনক্রিপশন কী (মেমোরি-শুধু, কখনো সংরক্ষণ হয় না)
+let pendingPwFormData = null;
 let pwPendingViewId = null;
+let pwPendingAction = 'creds';
+
+function bufToB64(buf){ return btoa(String.fromCharCode(...new Uint8Array(buf))); }
+function b64ToBuf(b64){ const bin = atob(b64); const arr = new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) arr[i]=bin.charCodeAt(i); return arr.buffer; }
+
+async function deriveKeyFromPassword(password, saltB64){
+  const enc = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey('raw', enc.encode(password), {name:'PBKDF2'}, false, ['deriveKey']);
+  return crypto.subtle.deriveKey(
+    {name:'PBKDF2', salt: b64ToBuf(saltB64), iterations: 150000, hash:'SHA-256'},
+    keyMaterial,
+    {name:'AES-GCM', length:256},
+    false,
+    ['encrypt','decrypt']
+  );
+}
+async function encryptText(key, plaintext){
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const enc = new TextEncoder();
+  const cipherBuf = await crypto.subtle.encrypt({name:'AES-GCM', iv}, key, enc.encode(plaintext));
+  return { c: bufToB64(cipherBuf), iv: bufToB64(iv.buffer) };
+}
+async function decryptText(key, cB64, ivB64){
+  const dec = new TextDecoder();
+  const plainBuf = await crypto.subtle.decrypt({name:'AES-GCM', iv: b64ToBuf(ivB64)}, key, b64ToBuf(cB64));
+  return dec.decode(plainBuf);
+}
+function getPwConfig(){ return cache.pwConfig[0] || null; }
+
+async function setupMasterPassword(newPassword){
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const saltB64 = bufToB64(salt.buffer);
+  const key = await deriveKeyFromPassword(newPassword, saltB64);
+  const canary = await encryptText(key, 'ok-verify');
+  const data = {'সল্ট': saltB64, 'কেনারি': canary.c, 'কেনারি_iv': canary.iv};
+  if(cache.pwConfig[0]){
+    await apiPost('পাসওয়ার্ড_কনফিগ','update', cache.pwConfig[0]['ID'], data);
+    Object.assign(cache.pwConfig[0], data);
+  } else {
+    const res = await apiPost('পাসওয়ার্ড_কনফিগ','add', null, data);
+    cache.pwConfig = [{...data, ID:res.id}];
+  }
+  pwSessionKey = key;
+  return key;
+}
+async function tryUnlockMasterPassword(enteredPassword){
+  const cfg = getPwConfig();
+  if(!cfg) return false;
+  try{
+    const key = await deriveKeyFromPassword(enteredPassword, cfg['সল্ট']);
+    const check = await decryptText(key, cfg['কেনারি'], cfg['কেনারি_iv']);
+    if(check==='ok-verify'){ pwSessionKey = key; return true; }
+    return false;
+  }catch(e){ return false; } // ভুল পাসওয়ার্ড দিলে AES-GCM ডিক্রিপ্ট ব্যর্থ হয়ে exception দেয়
+}
+/* পুরনো (এনক্রিপশন-চালু হওয়ার আগের) প্লেইন-টেক্সট এন্ট্রি থাকলে সেগুলো এনক্রিপ্ট করে
+   Firestore থেকে প্লেইন-টেক্সট ফিল্ড মুছে ফেলা — যাতে ডাটাবেসে কোথাও প্লেইন পাসওয়ার্ড না থাকে */
+async function migrateOldPlaintextEntries(key){
+  const oldEntries = cache.password.filter(p=>!p['সিক্রেট'] && p['পাসওয়ার্ড']!==undefined);
+  for(const p of oldEntries){
+    const secretObj = { 'ইউজারনেম': p['ইউজারনেম']||'', 'পাসওয়ার্ড': p['পাসওয়ার্ড']||'', 'বিবরণ': p['বিবরণ']||'' };
+    const hadDesc = !!(p['বিবরণ']||'').trim();
+    const enc = await encryptText(key, JSON.stringify(secretObj));
+    await apiPost('পাসওয়ার্ড','update', p['ID'], {
+      'সিক্রেট': enc.c, 'iv': enc.iv, 'বিবরণ_আছে': hadDesc,
+      'পাসওয়ার্ড': firebase.firestore.FieldValue.delete(),
+      'ইউজারনেম': firebase.firestore.FieldValue.delete(),
+      'বিবরণ': firebase.firestore.FieldValue.delete()
+    });
+    p['সিক্রেট']=enc.c; p['iv']=enc.iv; p['বিবরণ_আছে']=hadDesc;
+    delete p['পাসওয়ার্ড']; delete p['ইউজারনেম']; delete p['বিবরণ'];
+  }
+  return oldEntries.length;
+}
 
 function togglePwFormFields(){
   const type = document.getElementById('pwType').value;
@@ -3120,10 +3274,13 @@ function renderPassword(){
 
     <div class="card">
       <button class="btn full" id="openPwAddBtn" style="margin-top:0;">➕ নতুন এন্ট্রি যোগ করুন</button>
+      <button class="btn ghost full" id="openPwChangeBtn" style="margin-top:8px;">🔑 মাস্টার পাসওয়ার্ড ${getPwConfig()? 'পরিবর্তন করুন':'তৈরি করুন'}</button>
+      <p style="font-size:12px;color:var(--muted);margin-top:10px;margin-bottom:0;">🔒 প্রতিটা পাসওয়ার্ড/ইউজারনেম/বিবরণ আপনার মাস্টার পাসওয়ার্ড দিয়ে এনক্রিপ্ট করে সংরক্ষণ করা হয় — মাস্টার পাসওয়ার্ড ভুলে গেলে পুরনো এন্ট্রিগুলো আর দেখা যাবে না, তাই মনে রাখুন।</p>
     </div>
   `;
 
   document.getElementById('openPwAddBtn').addEventListener('click', openPwAddModal);
+  document.getElementById('openPwChangeBtn').addEventListener('click', openPwChangeModal);
   document.getElementById('pwSearch').addEventListener('keyup', renderPwList);
   renderPwList();
 }
@@ -3149,7 +3306,7 @@ function renderPwList(){
         <div class="rt-actions">
           ${p['ধরন']==='ওয়েবসাইট' && p['লিংক'] ? `<button type="button" class="btn small ghost" data-act="link">🔗 লিংক</button>` : ''}
           <button type="button" class="btn small ghost" data-act="creds">🔑 দেখুন</button>
-          ${p['বিবরণ'] ? `<button type="button" class="btn small ghost" data-act="desc">📝 বিবরণ</button>` : ''}
+          ${p['বিবরণ_আছে'] ? `<button type="button" class="btn small ghost" data-act="desc">📝 বিবরণ</button>` : ''}
         </div>
       </div>`;
 
@@ -3159,10 +3316,7 @@ function renderPwList(){
     row.querySelector('[data-act="creds"]').addEventListener('click', ()=> openPwAuth(p['ID'], 'creds'));
 
     const descBtn = row.querySelector('[data-act="desc"]');
-    if(descBtn) descBtn.addEventListener('click', ()=>{
-      document.getElementById('pwDescBody').textContent = p['বিবরণ']||'';
-      document.getElementById('pwDescModal').classList.add('show');
-    });
+    if(descBtn) descBtn.addEventListener('click', ()=> openPwAuth(p['ID'], 'desc'));
 
     list.appendChild(row);
   });
@@ -3184,25 +3338,47 @@ document.getElementById('pwForm').addEventListener('submit', async e=>{
   if(data['ধরন']==='ওয়েবসাইট' && !(data['লিংক']||'').trim()){ toast('ওয়েবসাইটের লিংক দিন'); return; }
   const dup = cache.password.some(p=>(p['নাম']||'').toLowerCase()===data['নাম'].trim().toLowerCase());
   if(dup){ toast('এই নামে ইতিমধ্যে একটা এন্ট্রি আছে'); return; }
+  pendingPwFormData = data;
+  if(pwSessionKey){
+    await savePendingPwEntry();
+  } else {
+    document.getElementById('pwAddModal').classList.remove('show');
+    openPwAuth(null, 'add');
+  }
+});
+async function savePendingPwEntry(){
+  const data = pendingPwFormData;
+  if(!data || !pwSessionKey) return;
+  const secretObj = { 'ইউজারনেম': data['ইউজারনেম']||'', 'পাসওয়ার্ড': data['পাসওয়ার্ড'], 'বিবরণ': data['বিবরণ']||'' };
   try{
-    const res = await apiPost('পাসওয়ার্ড','add', null, data);
-    cache.password.push({...data, ID:res.id});
-    e.target.reset();
+    const enc = await encryptText(pwSessionKey, JSON.stringify(secretObj));
+    const record = {
+      'নাম': data['নাম'], 'ধরন': data['ধরন'], 'লিংক': data['লিংক']||'',
+      'সিক্রেট': enc.c, 'iv': enc.iv, 'বিবরণ_আছে': !!(data['বিবরণ']||'').trim()
+    };
+    const res = await apiPost('পাসওয়ার্ড','add', null, record);
+    cache.password.push({...record, ID:res.id});
+    document.getElementById('pwForm').reset();
     togglePwFormFields();
     document.getElementById('pwAddModal').classList.remove('show');
     renderPwList();
-    toast('যোগ করা হয়েছে');
+    toast('এনক্রিপ্ট করে সংরক্ষণ করা হয়েছে');
   }catch(err){ toast('সংরক্ষণ করা যায়নি'); }
-});
+  pendingPwFormData = null;
+}
 
 /* ---- master password gate (wired once) ---- */
-let pwPendingAction = 'creds';
 function openPwAuth(id, action){
   pwPendingViewId = id;
   pwPendingAction = action || 'creds';
+  const isSetup = !getPwConfig();
+  document.getElementById('pwAuthTitle').textContent = isSetup ? 'মাস্টার পাসওয়ার্ড তৈরি করুন' : 'মাস্টার পাসওয়ার্ড দিন';
+  document.getElementById('pwAuthHint').style.display = isSetup ? 'block' : 'none';
+  document.getElementById('pwAuthConfirmWrap').style.display = isSetup ? 'block' : 'none';
   document.getElementById('pwAuthInput').value = '';
+  document.getElementById('pwAuthConfirmInput').value = '';
   document.getElementById('pwAuthMsg').style.display = 'none';
-  document.getElementById('pwAuthOkBtn').textContent = pwPendingAction==='delete' ? 'মুছুন' : 'দেখুন';
+  document.getElementById('pwAuthOkBtn').textContent = isSetup ? 'তৈরি করুন' : (pwPendingAction==='delete' ? 'মুছুন' : 'দেখুন');
   document.getElementById('pwAuthModal').classList.add('show');
   setTimeout(()=>document.getElementById('pwAuthInput').focus(), 50);
 }
@@ -3210,18 +3386,38 @@ function closePwAuth(){
   document.getElementById('pwAuthModal').classList.remove('show');
   pwPendingViewId = null;
 }
-document.getElementById('pwAuthCancelBtn').addEventListener('click', closePwAuth);
+document.getElementById('pwAuthCancelBtn').addEventListener('click', ()=>{ pendingPwFormData = null; closePwAuth(); });
 document.getElementById('pwAuthInput').addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('pwAuthOkBtn').click(); });
 document.getElementById('pwAuthOkBtn').addEventListener('click', async ()=>{
   const val = document.getElementById('pwAuthInput').value;
-  if(val !== PW_MASTER_PASSWORD){
-    document.getElementById('pwAuthMsg').style.display = 'block';
-    return;
+  const msg = document.getElementById('pwAuthMsg');
+  const isSetup = !getPwConfig();
+
+  if(isSetup){
+    const confirmVal = document.getElementById('pwAuthConfirmInput').value;
+    if(!val || val.length<4){ msg.textContent='অন্তত ৪ অক্ষরের পাসওয়ার্ড দিন'; msg.style.display='block'; return; }
+    if(val !== confirmVal){ msg.textContent='দুইটা পাসওয়ার্ড মেলেনি'; msg.style.display='block'; return; }
+    try{
+      await setupMasterPassword(val);
+      const migrated = await migrateOldPlaintextEntries(pwSessionKey);
+      if(migrated>0) toast(migrated + 'টা পুরনো এন্ট্রি এনক্রিপ্ট করে নিরাপদ করা হয়েছে');
+    }
+    catch(e){ msg.textContent='তৈরি করা যায়নি, আবার চেষ্টা করুন'; msg.style.display='block'; return; }
+  } else {
+    const ok = await tryUnlockMasterPassword(val);
+    if(!ok){ msg.textContent='পাসওয়ার্ড ভুল হয়েছে'; msg.style.display='block'; return; }
   }
+
   const id = pwPendingViewId;
   const action = pwPendingAction;
-  const p = cache.password.find(x=>x['ID']===id);
   closePwAuth();
+
+  if(action === 'add'){
+    await savePendingPwEntry();
+    return;
+  }
+
+  const p = cache.password.find(x=>x['ID']===id);
   if(!p) return;
 
   if(action === 'delete'){
@@ -3234,15 +3430,79 @@ document.getElementById('pwAuthOkBtn').addEventListener('click', async ()=>{
     return;
   }
 
+  let secret;
+  try{ secret = JSON.parse(await decryptText(pwSessionKey, p['সিক্রেট'], p['iv'])); }
+  catch(e){ toast('ডিক্রিপ্ট করা যায়নি'); return; }
+
+  if(action === 'desc'){
+    document.getElementById('pwDescBody').textContent = secret['বিবরণ'] || 'কোনো বিবরণ নেই';
+    document.getElementById('pwDescModal').classList.add('show');
+    return;
+  }
+
   const body = document.getElementById('pwCredsBody');
   body.innerHTML = `
-    ${p['ইউজারনেম'] ? `<div><strong>ইউজারনেম:</strong> ${p['ইউজারনেম']}</div>` : ''}
-    <div><strong>পাসওয়ার্ড:</strong> ${p['পাসওয়ার্ড']||''}</div>
+    ${secret['ইউজারনেম'] ? `<div><strong>ইউজারনেম:</strong> ${secret['ইউজারনেম']}</div>` : ''}
+    <div><strong>পাসওয়ার্ড:</strong> ${secret['পাসওয়ার্ড']||''}</div>
   `;
   document.getElementById('pwCredsModal').classList.add('show');
 });
 document.getElementById('pwCredsCloseBtn').addEventListener('click', ()=>document.getElementById('pwCredsModal').classList.remove('show'));
 document.getElementById('pwDescCloseBtn').addEventListener('click', ()=>document.getElementById('pwDescModal').classList.remove('show'));
+
+/* ---- মাস্টার পাসওয়ার্ড পরিবর্তন (বিদ্যমান সব এন্ট্রি নতুন কী দিয়ে re-encrypt করে) ---- */
+function openPwChangeModal(){
+  const cfg = getPwConfig();
+  document.getElementById('pwChangeOldWrap').style.display = cfg ? 'block' : 'none';
+  document.getElementById('pwChangeOldInput').value = '';
+  document.getElementById('pwChangeNewInput').value = '';
+  document.getElementById('pwChangeConfirmInput').value = '';
+  document.getElementById('pwChangeMsg').style.display = 'none';
+  document.getElementById('pwChangeTitle').textContent = cfg ? 'মাস্টার পাসওয়ার্ড পরিবর্তন করুন' : 'মাস্টার পাসওয়ার্ড তৈরি করুন';
+  document.getElementById('pwChangeModal').classList.add('show');
+}
+document.getElementById('pwChangeCloseBtn').addEventListener('click', ()=>document.getElementById('pwChangeModal').classList.remove('show'));
+document.getElementById('pwChangeOkBtn').addEventListener('click', async ()=>{
+  const cfg = getPwConfig();
+  const msg = document.getElementById('pwChangeMsg');
+  const newVal = document.getElementById('pwChangeNewInput').value;
+  const confirmVal = document.getElementById('pwChangeConfirmInput').value;
+  if(!newVal || newVal.length<4){ msg.textContent='অন্তত ৪ অক্ষরের নতুন পাসওয়ার্ড দিন'; msg.style.display='block'; return; }
+  if(newVal !== confirmVal){ msg.textContent='নতুন পাসওয়ার্ড দুইটা মেলেনি'; msg.style.display='block'; return; }
+
+  let oldKey = pwSessionKey;
+  if(cfg){
+    const oldVal = document.getElementById('pwChangeOldInput').value;
+    const ok = await tryUnlockMasterPassword(oldVal);
+    if(!ok){ msg.textContent='আগের মাস্টার পাসওয়ার্ড ভুল হয়েছে'; msg.style.display='block'; return; }
+    oldKey = pwSessionKey;
+  }
+
+  msg.textContent = 'পরিবর্তন করা হচ্ছে…'; msg.className='status-msg'; msg.style.display='block';
+  try{
+    // পুরনো কী দিয়ে সব এন্ট্রি ডিক্রিপ্ট করে রাখা
+    const decrypted = [];
+    if(cfg){
+      for(const p of cache.password){
+        const secret = JSON.parse(await decryptText(oldKey, p['সিক্রেট'], p['iv']));
+        decrypted.push({p, secret});
+      }
+    }
+    // নতুন মাস্টার পাসওয়ার্ড দিয়ে নতুন কী তৈরি (নতুন সল্ট, নতুন কেনারি)
+    const newKey = await setupMasterPassword(newVal);
+    // প্রতিটা এন্ট্রি নতুন কী দিয়ে re-encrypt করে Firestore-এ আপডেট
+    for(const {p, secret} of decrypted){
+      const enc = await encryptText(newKey, JSON.stringify(secret));
+      await apiPost('পাসওয়ার্ড','update', p['ID'], {'সিক্রেট': enc.c, 'iv': enc.iv});
+      p['সিক্রেট'] = enc.c; p['iv'] = enc.iv;
+    }
+    document.getElementById('pwChangeModal').classList.remove('show');
+    renderPassword();
+    toast('মাস্টার পাসওয়ার্ড পরিবর্তন করা হয়েছে');
+  }catch(err){
+    msg.textContent = 'পরিবর্তন করা যায়নি — আগের এন্ট্রিগুলো অপরিবর্তিত আছে'; msg.className='status-msg err';
+  }
+});
 
 /* ---------------- SETTINGS ---------------- */
 function renderSettings(){
@@ -3283,7 +3543,7 @@ function renderSettings(){
     </div>
     <div class="card">
       <h2>নিরাপত্তা: Firestore Rules</h2>
-      <p style="font-size:13px;color:var(--muted);margin:0 0 6px;">Test mode ৩০ দিন পর নিজে থেকে বন্ধ হয়ে যায়। এরপরও অ্যাপ চালু রাখতে, Firestore → Rules ট্যাবে গিয়ে নিচের rules বসিয়ে Publish করুন। এটা শুধু আপনার নিজের ব্যবহারের জন্য ঠিক আছে (এতে পাসওয়ার্ড এন্ট্রিও থাকে, তাই এই URL/config কারো সাথে শেয়ার করবেন না)।</p>
+      <p style="font-size:13px;color:var(--muted);margin:0 0 6px;">Test mode ৩০ দিন পর নিজে থেকে বন্ধ হয়ে যায়। এরপরও অ্যাপ চালু রাখতে, Firestore → Rules ট্যাবে গিয়ে নিচের rules বসিয়ে Publish করুন। এই rules আপনার Firebase config হাতে পাওয়া যে কাউকে ডাটা পড়া/লেখার সুযোগ দেয়, তাই এটা শুধু আপনার নিজের ব্যবহারের জন্য ঠিক আছে — এই URL/config কারো সাথে শেয়ার করবেন না। পাসওয়ার্ড এন্ট্রিগুলো এখন আপনার মাস্টার পাসওয়ার্ড দিয়ে এনক্রিপ্ট করে রাখা হয় (তাই config ফাঁস হলেও পাসওয়ার্ড সরাসরি পড়া যাবে না), তবে হিসাব, নামাজ, রুটিনের মতো বাকি ডাটা এখনো প্লেইন টেক্সটেই থাকে — তাই সতর্কতা হিসেবে config শেয়ার না করার পরামর্শ আগের মতোই বলবৎ থাকছে।</p>
       <pre style="background:#1e1e1e;color:#d4d4d4;padding:12px;border-radius:6px;font-size:11px;overflow-x:auto;font-family:'JetBrains Mono',monospace;">rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
