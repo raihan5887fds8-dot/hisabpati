@@ -561,6 +561,27 @@ const PRAYER_DETAILS = {
     {text:'২ রাকাত নফল', cls:'r-nafl', rakat:2}
   ]
 };
+// শুক্রবারে যোহরের বদলে জুমার নামাজ হয় — তাই আলাদা রাকাত-বিন্যাস
+const JUMA_DETAILS = [
+  {text:'৪ রাকাত সুন্নত (কাবলাল জুমুআ)', cls:'r-sunnah', rakat:4},
+  {text:'২ রাকাত ফরজ (জুমুআ)', cls:'r-farz', rakat:2},
+  {text:'৪ রাকাত সুন্নত (বা\'দাল জুমুআ)', cls:'r-sunnah', rakat:4},
+  {text:'২ রাকাত নফল', cls:'r-nafl', rakat:2}
+];
+function isFridayDate(dateStr){
+  const d = new Date((dateStr || todayStr())+'T00:00:00');
+  return d.getDay()===5;
+}
+// যোহরের জায়গায় শুক্রবারে জুমার রাকাত-বিন্যাস দেখাতে হবে বলে, তারিখ অনুযায়ী সঠিক ডিটেইলস বাছাই করে এই ফাংশন
+function detailsFor(name, dateStr){
+  if(name==='যোহর' && isFridayDate(dateStr)) return JUMA_DETAILS;
+  return PRAYER_DETAILS[name] || [];
+}
+// লিস্ট/টাইটেলে দেখানোর নাম — শুক্রবারে "যোহর"-এর বদলে "জুমা" লেখা হবে (ডাটার কী/কলাম অপরিবর্তিত থাকে)
+function labelFor(name, dateStr){
+  if(name==='যোহর' && isFridayDate(dateStr)) return 'জুমা';
+  return name;
+}
 const ISLAMIC_EVENTS = [
   {month:1, day:1, title:'হিজরি নববর্ষ'},
   {month:1, day:10, title:'আশুরা'},
@@ -618,6 +639,10 @@ let dailyAmalHtml = '';
 let prayerTimes = { 'ফজর':'05:00','যোহর':'12:30','আসর':'16:00','মাগরিব':'18:15','এশা':'19:45' };
 let currentRakatPrayer = null;
 let currentRakatDate = null; // রাকাত-চেকলিস্ট পপআপ কোন তারিখের জন্য খোলা (আজ বা গতকাল)
+let historyMonthOffset = 0; // দৈনিক আমল হিস্ট্রি টেবিলে চলতি মাস থেকে কত মাস আগে/পরে দেখানো হচ্ছে (0 = চলতি মাস)
+let financeHistoryLimit = 30; // হিসাব পেইজের কার্যক্রম হিস্ট্রি টেবিলে কতগুলো সারি দেখানো হচ্ছে
+let financeHistoryRange = { from:'', to:'' }; // সাম্প্রতিক কার্যক্রম টেবিলে তারিখ ফিল্টার (খালি মানে সব)
+let financeHistoryFilterOpen = false; // ফিল্টার বার খোলা/বন্ধ আছে কিনা
 let testDateOverride = null; // 'YYYY-MM-DD' হলে পুরো অ্যাপ এটাকেই "আজ" ধরে কাজ করবে (শুধু টেস্টের জন্য)
 let finFilter = { cat:'', from:'', to:'', minAmt:'', maxAmt:'', q:'' };
 let ledgerFilter = { name:'', type:'', from:'', to:'', minAmt:'', maxAmt:'' };
@@ -662,7 +687,22 @@ function todayStr(d){
   if(!d){
     d = testDateOverride ? new Date(testDateOverride+'T00:00:00') : new Date();
   }
-  return d.toISOString().slice(0,10);
+  // toISOString() UTC-তে কনভার্ট করে ফেলত, ফলে বাংলাদেশের মতো UTC+৬ টাইমজোনে
+  // তারিখ এক দিন পিছিয়ে যেত (যেমন শুক্রবার সেট করলে বৃহস্পতিবার দেখাত)।
+  // তাই লোকাল তারিখ থেকেই সরাসরি স্ট্রিং বানানো হচ্ছে।
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const day = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+// টেস্ট-তারিখ (testDateOverride) উপেক্ষা করে ফোনের আসল আজকের তারিখ — এটা দিয়েই
+// বোঝা হয় কোন এন্ট্রিগুলো আসলে "ভবিষ্যতের" (টেস্টের সময় তৈরি), যেন সেগুলোই শুধু মোছা যায়
+function realTodayStr(){
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const day = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
 }
 
 function updateHeaderLine(){
@@ -791,6 +831,54 @@ async function apiPost(sheet, action, id, data){
     }
     throw new Error('অজানা action: ' + action);
   }catch(e){ throw new Error('সংরক্ষণ ব্যর্থ: ' + e.message); }
+}
+
+// একই তারিখের জন্য দুইবার আলাদা রেকর্ড (ডুপ্লিকেট) তৈরি হয়ে যাওয়া ঠেকাতে —
+// নতুন তারিখের এন্ট্রি তৈরির সময় র‍্যান্ডম আইডির বদলে তারিখ থেকেই একটা স্থির
+// (deterministic) ডকুমেন্ট আইডি ব্যবহার করা হচ্ছে, যাতে একই তারিখে দুইবার সেভ করলেও
+// (যেমন একসাথে দুটো ট্যাব/একাধিক অটো-চেক একসাথে চললে) সেটা একই ডকুমেন্টে গিয়ে পড়ে।
+function prayerDocIdFor(dateStr){
+  return 'namaz_' + dateStr;
+}
+async function apiUpsertPrayer(dateStr, data){
+  if(!db) throw new Error('Firebase কনফিগার করা হয়নি');
+  const docId = prayerDocIdFor(dateStr);
+  try{
+    await db.collection('নামাজ').doc(docId).set(data, {merge:true});
+    return {status:'ok', id: docId};
+  }catch(e){ throw new Error('সংরক্ষণ ব্যর্থ: ' + e.message); }
+}
+// আগে থেকে তৈরি হয়ে যাওয়া একই-তারিখের ডুপ্লিকেট রেকর্ডগুলো একসাথে মার্জ করে বাড়তিগুলো মুছে ফেলে
+async function dedupePrayerRecords(){
+  if(!db) return;
+  const groups = {};
+  cache.prayer.forEach(r=>{
+    const d = r['তারিখ']; if(!d) return;
+    (groups[d] = groups[d] || []).push(r);
+  });
+  let changed = false;
+  for(const d in groups){
+    const list = groups[d];
+    if(list.length<=1) continue;
+    // সবচেয়ে বেশি তথ্যপূর্ণ রেকর্ডটাকে মূল ধরে বাকিগুলোর তথ্য তাতে মার্জ করে বাদবাকি মুছে দেওয়া হচ্ছে
+    list.sort((a,b)=> Object.keys(b).filter(k=>b[k]).length - Object.keys(a).filter(k=>a[k]).length);
+    const keep = list[0];
+    for(let i=1;i<list.length;i++){
+      const extra = list[i];
+      const patch = {};
+      [...PRAYERS,'কাজা_প্রসেসড'].forEach(k=>{ if(!keep[k] && extra[k]) patch[k]=extra[k]; });
+      try{
+        if(Object.keys(patch).length){
+          await apiPost('নামাজ','update', keep['ID'], patch);
+          Object.assign(keep, patch);
+        }
+        if(extra['ID']) await apiPost('নামাজ','delete', extra['ID']);
+      }catch(e){ console.error('ডুপ্লিকেট পরিষ্কার ব্যর্থ', d, e); continue; }
+      cache.prayer = cache.prayer.filter(x=>x!==extra);
+      changed = true;
+    }
+  }
+  return changed;
 }
 
 async function refreshAll(){
@@ -1031,6 +1119,49 @@ async function settlePayable(name, maxBal){
   }catch(e){ toast('সংরক্ষণ করা যায়নি'); }
 }
 
+// হিসাব পেইজের সব কার্যক্রম (আয়-খরচ, দেনা-পাওনার লেনদেন, স্থানান্তর) একসাথে সময়ানুক্রমে সাজিয়ে দেয়
+function buildFinanceActivities(){
+  const items = [];
+  cache.finance.forEach(r=>{
+    items.push({
+      date: r['তারিখ']||'',
+      time: r['সময়']||'',
+      desc: `${r['ক্যাটাগরি']||(r['ধরন']||'')}${r['নোট']? ' — '+r['নোট'] : ''}`,
+      meta: r['অ্যাকাউন্ট'] && r['অ্যাকাউন্ট']!=='ক্যাশ' ? r['অ্যাকাউন্ট'] : '',
+      amount: Number(r['পরিমাণ'])||0,
+      sign: r['ধরন']==='আয়' ? '+' : '−',
+      cls: r['ধরন']==='আয়' ? 'income' : 'expense'
+    });
+  });
+  cache.ledger.forEach(r=>{
+    const label = r['লেনদেন']==='বৃদ্ধি'
+      ? (r['ধরন']==='দেনাদার' ? 'ধার দিলাম' : 'ধার নিলাম')
+      : (r['ধরন']==='দেনাদার' ? 'ফেরত পেলাম' : 'ফেরত দিলাম');
+    items.push({
+      date: r['তারিখ']||'',
+      time: r['সময়']||'',
+      desc: `${r['নাম']||''} — ${label}`,
+      meta: r['অ্যাকাউন্ট'] && r['অ্যাকাউন্ট']!=='ক্যাশ' ? r['অ্যাকাউন্ট'] : '',
+      amount: Number(r['পরিমাণ'])||0,
+      sign: r['লেনদেন']==='বৃদ্ধি' ? '+' : '−',
+      cls: r['লেনদেন']==='বৃদ্ধি' ? 'income' : 'expense'
+    });
+  });
+  cache.transfer.forEach(t=>{
+    items.push({
+      date: t['তারিখ']||'',
+      time: t['সময়']||'',
+      desc: `স্থানান্তর: ${t['থেকে']||''} → ${t['যেখানে']||''}${t['নোট']? ' — '+t['নোট'] : ''}`,
+      meta: '',
+      amount: Number(t['পরিমাণ'])||0,
+      sign: '',
+      cls: ''
+    });
+  });
+  items.sort((a,b)=> ((b.date||'')+(b.time||'')).localeCompare((a.date||'')+(a.time||'')));
+  return items;
+}
+
 function renderFinance(){
   const rows = [...cache.finance].sort((a,b)=> (b['তারিখ']||'').localeCompare(a['তারিখ']||''));
   let income=0, expense=0;
@@ -1135,6 +1266,26 @@ function renderFinance(){
         <button class="btn small ghost fin-modal-btn" data-modal="pieModal">🥧 পাই চার্ট</button>
         <button class="btn small ghost fin-modal-btn" data-modal="exportModal">⬇ রিপোর্ট এক্সপোর্ট</button>
       </div>
+    </div>
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+        <h2 style="margin:0;">সাম্প্রতিক কার্যক্রম</h2>
+        <button class="btn ghost small" id="financeHistoryFilterToggle" style="margin:0;white-space:nowrap;">📅 তারিখ${(financeHistoryRange.from||financeHistoryRange.to)?' •':''}</button>
+      </div>
+      <div id="financeHistoryFilterBar" style="display:${financeHistoryFilterOpen?'flex':'none'};gap:6px;align-items:center;margin-top:10px;flex-wrap:wrap;">
+        <input type="date" id="financeHistoryFrom" value="${financeHistoryRange.from}" style="flex:1;min-width:0;">
+        <span style="color:var(--muted);font-size:12px;">থেকে</span>
+        <input type="date" id="financeHistoryTo" value="${financeHistoryRange.to}" style="flex:1;min-width:0;">
+        <button class="btn small" id="financeHistoryApply" style="margin:0;">খুঁজুন</button>
+        ${(financeHistoryRange.from||financeHistoryRange.to) ? `<button class="btn ghost small" id="financeHistoryClear" style="margin:0;">✕</button>` : ''}
+      </div>
+      <div style="overflow-x:auto;margin-top:10px;">
+        <table class="amal-table" id="financeHistoryTable">
+          <thead><tr><th>তারিখ</th><th>বিবরণ</th><th style="text-align:right;">পরিমাণ</th></tr></thead>
+          <tbody id="financeHistoryBody"></tbody>
+        </table>
+      </div>
+      <button class="btn ghost small full" id="financeHistoryMoreBtn" style="margin-top:10px;display:none;">আরও দেখুন</button>
     </div>
     <div class="modal" id="newEntryModal"><div class="modal-box" style="max-width:520px;">
       <h2>নতুন এন্ট্রি</h2>
@@ -1349,6 +1500,50 @@ function renderFinance(){
     if(m) m.classList.remove('show');
     openFinanceModal = null;
   }));
+
+  // সাম্প্রতিক কার্যক্রম হিস্ট্রি টেবিল
+  (function renderFinanceHistory(){
+    let allActivities = buildFinanceActivities();
+    if(financeHistoryRange.from) allActivities = allActivities.filter(it=> (it.date||'') >= financeHistoryRange.from);
+    if(financeHistoryRange.to) allActivities = allActivities.filter(it=> (it.date||'') <= financeHistoryRange.to);
+    const body = document.getElementById('financeHistoryBody');
+    const moreBtn = document.getElementById('financeHistoryMoreBtn');
+    if(!body) return;
+    const shown = allActivities.slice(0, financeHistoryLimit);
+    body.innerHTML = shown.length ? '' : `<tr><td colspan="3" style="padding:14px;color:var(--muted)">এই তারিখের মধ্যে কোনো কার্যক্রম নেই</td></tr>`;
+    shown.forEach(it=>{
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td class="dt">${it.date}</td>
+        <td>${it.desc}${it.meta? ' <span class="ledger-meta">· '+it.meta+'</span>':''}</td>
+        <td style="text-align:right;" class="amt ${it.cls}">${it.sign}৳${fmtAmt(it.amount)}</td>`;
+      body.appendChild(tr);
+    });
+    if(moreBtn){
+      moreBtn.style.display = allActivities.length > financeHistoryLimit ? 'block' : 'none';
+      moreBtn.onclick = ()=>{ financeHistoryLimit += 30; renderFinanceHistory(); };
+    }
+    const applyBtn = document.getElementById('financeHistoryApply');
+    const clearBtn = document.getElementById('financeHistoryClear');
+    const toggleBtn = document.getElementById('financeHistoryFilterToggle');
+    const filterBar = document.getElementById('financeHistoryFilterBar');
+    if(toggleBtn && filterBar) toggleBtn.onclick = ()=>{
+      financeHistoryFilterOpen = !financeHistoryFilterOpen;
+      filterBar.style.display = financeHistoryFilterOpen ? 'flex' : 'none';
+    };
+    if(applyBtn) applyBtn.onclick = ()=>{
+      financeHistoryRange.from = document.getElementById('financeHistoryFrom').value;
+      financeHistoryRange.to = document.getElementById('financeHistoryTo').value;
+      financeHistoryFilterOpen = true;
+      financeHistoryLimit = 30;
+      renderFinance();
+    };
+    if(clearBtn) clearBtn.onclick = ()=>{
+      financeHistoryRange.from = ''; financeHistoryRange.to = '';
+      financeHistoryFilterOpen = true;
+      financeHistoryLimit = 30;
+      renderFinance();
+    };
+  })();
 
   const now = new Date();
   document.getElementById('ledgerTime').value = String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
@@ -2000,6 +2195,28 @@ function renderPrayer(){
     </div></div>
 
     <div class="card">
+      <h2>নামাজের সময় ও ট্র্যাকার</h2>
+      <div id="ptList"></div>
+      <div class="hint" style="font-size:12px;color:var(--muted);text-align:center;margin-top:6px;">নামাজের নামে ট্যাপ করলে রাকাতের বিস্তারিত চেকলিস্ট খুলবে</div>
+      <button class="btn ${notifyEnabled?'':'ghost'} small" id="notifyToggleBtn" style="margin-top:12px;">${notifyEnabled? '🔔 নোটিফিকেশন চালু আছে' : '🔕 নামাজের নোটিফিকেশন চালু করুন'}</button>
+      <button class="btn ghost small" id="openQuranTrackerBtn" style="margin-top:8px;">📖 কুরআন খতম ট্র্যাকার</button>
+    </div>
+
+    <div class="card">
+      <h2>কাজা নামাজ</h2>
+      ${qazaTotal===null ? `
+        <p style="font-size:13px;color:var(--muted);margin-bottom:10px;">এখনো হিসাব করা হয়নি। জন্ম তারিখ দিয়ে আপনার মোট কাজা রাকাত হিসাব করুন।</p>
+        <button class="btn gold full" id="openQazaCalc">কাজা হিসাব করুন</button>
+      ` : `
+        <div class="qaza-box">
+          <div><div class="qaza-num">${toBn(qazaTotal)}</div><div class="qaza-lbl">রাকাত বাকি</div></div>
+          <button class="btn" id="openAda">আদায় করলাম</button>
+        </div>
+        <button class="btn ghost small" id="openQazaCalc" style="margin-top:10px;">নতুন করে হিসাব করুন</button>
+      `}
+    </div>
+
+    <div class="card">
       <h2>🔥 নামাজের ধারাবাহিকতা</h2>
       <div style="text-align:center;padding:8px 0;">
         <div style="font-size:36px;font-weight:700;color:var(--gold);">${toBn(prayerStreak)}</div>
@@ -2025,28 +2242,6 @@ function renderPrayer(){
           <div style="font-size:11px;color:var(--muted);">গত ৩০ দিন — জামাতে</div>
         </div>
       </div>
-    </div>
-
-    <div class="card">
-      <h2>কাজা নামাজ</h2>
-      ${qazaTotal===null ? `
-        <p style="font-size:13px;color:var(--muted);margin-bottom:10px;">এখনো হিসাব করা হয়নি। জন্ম তারিখ দিয়ে আপনার মোট কাজা রাকাত হিসাব করুন।</p>
-        <button class="btn gold full" id="openQazaCalc">কাজা হিসাব করুন</button>
-      ` : `
-        <div class="qaza-box">
-          <div><div class="qaza-num">${toBn(qazaTotal)}</div><div class="qaza-lbl">রাকাত বাকি</div></div>
-          <button class="btn" id="openAda">আদায় করলাম</button>
-        </div>
-        <button class="btn ghost small" id="openQazaCalc" style="margin-top:10px;">নতুন করে হিসাব করুন</button>
-      `}
-    </div>
-
-    <div class="card">
-      <h2>নামাজের সময় ও ট্র্যাকার</h2>
-      <div id="ptList"></div>
-      <div class="hint" style="font-size:12px;color:var(--muted);text-align:center;margin-top:6px;">নামাজের নামে ট্যাপ করলে রাকাতের বিস্তারিত চেকলিস্ট খুলবে</div>
-      <button class="btn ${notifyEnabled?'':'ghost'} small" id="notifyToggleBtn" style="margin-top:12px;">${notifyEnabled? '🔔 নোটিফিকেশন চালু আছে' : '🔕 নামাজের নোটিফিকেশন চালু করুন'}</button>
-      <button class="btn ghost small" id="openQuranTrackerBtn" style="margin-top:8px;">📖 কুরআন খতম ট্র্যাকার</button>
     </div>
 
     <div class="modal" id="quranTrackerModal"><div class="modal-box" style="max-width:480px;">
@@ -2133,6 +2328,11 @@ function renderPrayer(){
 
     <div class="card">
       <h2>দৈনিক আমল হিস্ট্রি</h2>
+      <div style="display:flex;align-items:center;justify-content:center;gap:14px;margin-bottom:10px;">
+        <button class="btn ghost small" id="historyPrevMonth" style="padding:4px 12px;">◀</button>
+        <div id="historyMonthLabel" style="font-weight:600;min-width:120px;text-align:center;"></div>
+        <button class="btn ghost small" id="historyNextMonth" style="padding:4px 12px;">▶</button>
+      </div>
       <div style="overflow-x:auto;">
         <table class="amal-table">
           <thead><tr><th>তারিখ</th>${PRAYERS.map(p=>`<th>${p}</th>`).join('')}<th>কুরআন</th></tr></thead>
@@ -2159,7 +2359,7 @@ function renderPrayer(){
     const row = document.createElement('div');
     row.className = 'pt-row' + (i===0?' active-prayer':'');
     row.innerHTML = `
-      <div class="pt-name" data-name="${p.name}">${p.name}</div>
+      <div class="pt-name" data-name="${p.name}">${labelFor(p.name, todayStr())}</div>
       <input type="time" value="${p.t}" data-name="${p.name}" class="pt-time">
       <div class="pt-count" data-count="${p.name}">--</div>
       <div>${badgeFor(rec[p.name])}</div>`;
@@ -2174,16 +2374,17 @@ function renderPrayer(){
   }));
   updatePrayerCountdowns();
 
-  // history table
-  const hb = document.getElementById('amalHistoryBody');
-  const rows = [...cache.prayer].sort((a,b)=>(b['তারিখ']||'').localeCompare(a['তারিখ']||'')).slice(0,30);
-  if(!rows.length){ hb.innerHTML = `<tr><td colspan="${PRAYERS.length+2}" style="padding:14px;color:var(--muted)">এখনো কোনো ডাটা নেই</td></tr>`; }
-  rows.forEach(r=>{
-    const tr = document.createElement('tr');
-    tr.innerHTML = `<td class="dt">${r['তারিখ']}</td>${PRAYERS.map(p=>`<td>${badgeFor(r[p])}</td>`).join('')}<td>${pagesReadOn(r['তারিখ'])>0? '📖':'–'}</td>`;
-    tr.style.cursor='pointer';
-    tr.addEventListener('click', ()=>showDayDetails(r));
-    hb.appendChild(tr);
+  // history table (মাস অনুযায়ী)
+  renderAmalHistoryMonth();
+  document.getElementById('historyPrevMonth').addEventListener('click', ()=>{
+    historyMonthOffset -= 1;
+    renderAmalHistoryMonth();
+  });
+  document.getElementById('historyNextMonth').addEventListener('click', ()=>{
+    if(historyMonthOffset < 0){
+      historyMonthOffset += 1;
+      renderAmalHistoryMonth();
+    }
   });
 
   // wire up buttons
@@ -2331,6 +2532,51 @@ function renderPrayer(){
   }
 }
 
+// দৈনিক আমল হিস্ট্রি টেবিল: historyMonthOffset অনুযায়ী নির্দিষ্ট মাসের প্রতিটি দিন (ডাটা থাকুক বা না থাকুক) দেখায়
+function renderAmalHistoryMonth(){
+  const hb = document.getElementById('amalHistoryBody');
+  const label = document.getElementById('historyMonthLabel');
+  if(!hb || !label) return;
+
+  const today = new Date();
+  const base = new Date(today.getFullYear(), today.getMonth() + historyMonthOffset, 1);
+  const y = base.getFullYear();
+  const m = base.getMonth(); // 0-indexed
+  label.textContent = `${MONTHS[m]} ${toBn(y)}`;
+
+  // পরের মাসে যাওয়ার বাটন বন্ধ রাখা হয় যদি সেটা চলতি মাসের পরে হয়ে যায়
+  const nextBtn = document.getElementById('historyNextMonth');
+  if(nextBtn) nextBtn.disabled = (historyMonthOffset >= 0);
+
+  const daysInMonth = new Date(y, m + 1, 0).getDate();
+  const byDate = {};
+  cache.prayer.forEach(r=>{ if(r['তারিখ']) byDate[r['তারিখ']] = r; });
+
+  const todayDateStr = todayStr();
+  hb.innerHTML = '';
+  let anyRendered = false;
+
+  for(let day = daysInMonth; day >= 1; day--){
+    const dateStr = `${y}-${String(m+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    if(dateStr > todayDateStr) continue; // ভবিষ্যতের দিন দেখানো হবে না
+    anyRendered = true;
+    const r = byDate[dateStr];
+    const tr = document.createElement('tr');
+    if(r){
+      tr.innerHTML = `<td class="dt">${dateStr}</td>${PRAYERS.map(p=>`<td>${badgeFor(r[p])}</td>`).join('')}<td>${pagesReadOn(dateStr)>0? '📖':'–'}</td>`;
+      tr.style.cursor='pointer';
+      tr.addEventListener('click', ()=>showDayDetails(r));
+    } else {
+      tr.innerHTML = `<td class="dt">${dateStr}</td>${PRAYERS.map(()=>`<td style="color:var(--muted)">–</td>`).join('')}<td style="color:var(--muted)">–</td>`;
+      tr.style.opacity = '0.6';
+    }
+    hb.appendChild(tr);
+  }
+  if(!anyRendered){
+    hb.innerHTML = `<tr><td colspan="${PRAYERS.length+2}" style="padding:14px;color:var(--muted)">এই মাসের কোনো দিন এখনো আসেনি</td></tr>`;
+  }
+}
+
 function showDayDetails(r){
   document.getElementById('detailsTitle').textContent = r['তারিখ'];
   const yesterdayD = todayStr(new Date(new Date(todayStr()+'T00:00:00').getTime() - 86400000));
@@ -2339,10 +2585,10 @@ function showDayDetails(r){
   PRAYERS.forEach(p=>{
     const parsed = parseCell(r[p]);
     html += `<div style="margin-bottom:10px;display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
-      <div><b>${p}</b>: `;
+      <div><b>${labelFor(p, r['তারিখ'])}</b>: `;
     if(!parsed){ html += 'তথ্য নেই'; }
     else{
-      const items = (PRAYER_DETAILS[p]||[]).filter((it,idx)=>parsed.checks && parsed.checks[idx]).map(it=>it.text);
+      const items = detailsFor(p, r['তারিখ']).filter((it,idx)=>parsed.checks && parsed.checks[idx]).map(it=>it.text);
       html += (parsed.jamaat? 'জামায়াতে আদায়। ':'') + (items.length? items.join(', ') : 'কিছু চেক করা হয়নি');
     }
     html += `</div>${editable? `<button class="btn ghost small edit-past-rakat" data-name="${p}" data-date="${r['তারিখ']}" style="flex-shrink:0;">✎ এডিট</button>` : ''}</div>`;
@@ -2350,12 +2596,24 @@ function showDayDetails(r){
   if(!editable) html += `<div class="ledger-meta" style="margin-top:6px;">শুধু আজ বা গতকালের নামাজ এডিট করা যায়</div>`;
   const qPages = pagesReadOn(r['তারিখ']);
   if(qPages>0) html += `<div><b>কুরআন:</b> ${toBn(qPages)} পৃষ্ঠা পড়া হয়েছে</div>`;
+  if(r['ID'] && r['তারিখ'] > realTodayStr()) html += `<button class="btn ghost small danger" id="deleteDayRecordBtn" style="margin-top:14px;width:100%;">🗑 এই দিনের এন্ট্রি মুছুন</button>`;
   document.getElementById('detailsBody').innerHTML = html;
   document.getElementById('detailsBody').querySelectorAll('.edit-past-rakat').forEach(b=>{
     b.addEventListener('click', ()=>{
       document.getElementById('detailsModal').classList.remove('show');
       openRakatModal(b.dataset.name, b.dataset.date);
     });
+  });
+  const delBtn = document.getElementById('deleteDayRecordBtn');
+  if(delBtn) delBtn.addEventListener('click', async ()=>{
+    if(!confirm(r['তারিখ'] + ' — এই তারিখের পুরো এন্ট্রিটা মুছে ফেলতে চান? এটা ফেরত আনা যাবে না।')) return;
+    try{
+      await apiPost('নামাজ','delete', r['ID']);
+      cache.prayer = cache.prayer.filter(x=>x['ID']!==r['ID']);
+      document.getElementById('detailsModal').classList.remove('show');
+      renderPrayer();
+      toast('এন্ট্রি মুছে ফেলা হয়েছে');
+    }catch(e){ toast('মুছতে ব্যর্থ হয়েছে'); }
   });
   document.getElementById('detailsModal').classList.add('show');
 }
@@ -2499,14 +2757,16 @@ function openRakatModal(name, dateStr){
   currentRakatPrayer = name;
   currentRakatDate = dateStr || todayStr();
   const rec = cache.prayer.find(r=>r['তারিখ']===currentRakatDate) || {};
-  const parsed = parseCell(rec[name]) || { jamaat:false, checks: PRAYER_DETAILS[name].map(()=>false) };
-  document.getElementById('rakatModalTitle').textContent = name + (currentRakatDate!==todayStr() ? ' — ' + currentRakatDate : '');
+  const details = detailsFor(name, currentRakatDate);
+  const parsed = parseCell(rec[name]) || { jamaat:false, checks: details.map(()=>false) };
+  const displayName = labelFor(name, currentRakatDate);
+  document.getElementById('rakatModalTitle').textContent = displayName + (currentRakatDate!==todayStr() ? ' — ' + currentRakatDate : '');
   let html = `
     <div class="rakat-row">
       <span>🕌 জামায়াতে আদায় করেছি</span>
       <label class="switch"><input type="checkbox" id="jamaatChk" ${parsed.jamaat?'checked':''}><span class="slider"></span></label>
     </div>`;
-  PRAYER_DETAILS[name].forEach((it,idx)=>{
+  details.forEach((it,idx)=>{
     html += `
       <div class="rakat-row">
         <span class="${it.cls}">${it.text}</span>
@@ -2525,11 +2785,12 @@ document.getElementById('rakatSaveBtn').addEventListener('click', async ()=>{
   const cellVal = JSON.stringify({ jamaat, checks });
 
   const rec = cache.prayer.find(r=>r['তারিখ']===dateStr) || {};
-  const prevParsed = parseCell(rec[name]) || { checks: PRAYER_DETAILS[name].map(()=>false) };
+  const details = detailsFor(name, dateStr);
+  const prevParsed = parseCell(rec[name]) || { checks: details.map(()=>false) };
   let naflDelta = 0;
   let farzNewlyChecked = false;
-  const farzIdx = PRAYER_DETAILS[name].findIndex(it=>it.cls==='r-farz');
-  PRAYER_DETAILS[name].forEach((it,idx)=>{
+  const farzIdx = details.findIndex(it=>it.cls==='r-farz');
+  details.forEach((it,idx)=>{
     const wasChecked = !!prevParsed.checks[idx];
     const isChecked = !!checks[idx];
     if(it.cls==='r-nafl' && isChecked && !wasChecked) naflDelta += it.rakat;
@@ -2541,7 +2802,7 @@ document.getElementById('rakatSaveBtn').addEventListener('click', async ()=>{
       await apiPost('নামাজ','update', rec['ID'], {[name]: cellVal});
       rec[name] = cellVal;
     } else {
-      const res = await apiPost('নামাজ','add', null, {'তারিখ':dateStr, [name]: cellVal});
+      const res = await apiUpsertPrayer(dateStr, {'তারিখ':dateStr, [name]: cellVal});
       rec['ID'] = res.id; rec['তারিখ'] = dateStr; rec[name] = cellVal;
       cache.prayer.push(rec);
     }
@@ -2554,7 +2815,7 @@ document.getElementById('rakatSaveBtn').addEventListener('click', async ()=>{
     if(farzNewlyChecked){
       const flags = getQazaProcessedFlags(rec);
       if(flags[name]){
-        const rakat = fardRakatFor(name);
+        const rakat = fardRakatFor(name, dateStr);
         if(rakat>0 && getQazaTotal()!==null){
           await setQazaTotal(Math.max(0, getQazaTotal()-rakat));
         }
@@ -2627,15 +2888,15 @@ async function detectMissedRoutines(){
 
 /* ---- ওয়াক্ত পার হয়ে গেলে, সেই ওয়াক্তের ফরজ না পড়া থাকলে স্বয়ংক্রিয়ভাবে কাজায় যোগ ---- */
 const QAZA_WAQT_ORDER = ['ফজর','যোহর','আসর','মাগরিব','এশা'];
-function fardRakatFor(name){
-  const item = (PRAYER_DETAILS[name]||[]).find(it=>it.cls==='r-farz');
+function fardRakatFor(name, dateStr){
+  const item = detailsFor(name, dateStr).find(it=>it.cls==='r-farz');
   return item ? item.rakat : 0;
 }
 function isFarzDone(rec, name){
   if(!rec) return false;
   const parsed = parseCell(rec[name]);
   if(!parsed || !parsed.checks) return false;
-  const idx = PRAYER_DETAILS[name].findIndex(it=>it.cls==='r-farz');
+  const idx = detailsFor(name, rec['তারিখ']).findIndex(it=>it.cls==='r-farz');
   return idx>=0 && !!parsed.checks[idx];
 }
 function getPrayerStreak(){
@@ -2768,7 +3029,7 @@ async function detectMissedFardForQaza(){
     const flags = getQazaProcessedFlags(rec);
     if(flags[name]) return rec;
     if(isFarzDone(rec, name)) return rec;
-    const rakat = fardRakatFor(name);
+    const rakat = fardRakatFor(name, dateStr);
     if(rakat>0) await setQazaTotal((getQazaTotal()||0) + rakat);
     const newRec = rec || {'তারিখ':dateStr};
     flags[name] = true;
@@ -2777,7 +3038,7 @@ async function detectMissedFardForQaza(){
       await apiPost('নামাজ','update', newRec['ID'], {'কাজা_প্রসেসড': val});
       newRec['কাজা_প্রসেসড'] = val;
     } else {
-      const res = await apiPost('নামাজ','add', null, {'তারিখ':dateStr, 'কাজা_প্রসেসড': val});
+      const res = await apiUpsertPrayer(dateStr, {'তারিখ':dateStr, 'কাজা_প্রসেসড': val});
       newRec['ID'] = res.id; newRec['তারিখ'] = dateStr; newRec['কাজা_প্রসেসড'] = val;
       cache.prayer.push(newRec);
     }
@@ -3613,6 +3874,7 @@ service cloud.firestore {
     try{
       await saveConfig(cfg);
       await refreshAll();
+      await dedupePrayerRecords();
       msg.textContent = 'সংযুক্ত হয়েছে ✓'; msg.className='status-msg ok';
       toast('সংযোগ সফল হয়েছে');
       setTab('finance');
@@ -3631,7 +3893,7 @@ service cloud.firestore {
   prayerTimes = await localGet('prayerTimes', prayerTimes);
   notifyEnabled = await localGet('notifyEnabled', false);
   if(notifyEnabled && (!('Notification' in window) || Notification.permission!=='granted')) notifyEnabled = false;
-  if(db){ await refreshAll(); }
+  if(db){ await refreshAll(); await dedupePrayerRecords(); }
   updateHeaderLine();
   render();
   if(db){
