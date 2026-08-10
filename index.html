@@ -44,7 +44,7 @@
   header{
     background:linear-gradient(160deg,var(--ink-deep),var(--ink) 70%);
     color:var(--parchment-card);
-    padding:28px 22px 20px;
+    padding:16px 18px 10px;
     position:relative;
     overflow:hidden;
   }
@@ -59,14 +59,14 @@
   }
   header h1{
     font-family:'Tiro Bangla',serif;
-    font-size:26px;
-    margin:0 0 3px;
+    font-size:20px;
+    margin:0 0 2px;
     position:relative;
     letter-spacing:.3px;
   }
   header p{
     margin:0;
-    font-size:13px;
+    font-size:11px;
     color:var(--gold-soft);
     position:relative;
     font-family:'JetBrains Mono',monospace;
@@ -166,13 +166,82 @@
 
   .header-top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;}
   .header-left{min-width:0;flex-shrink:0;}
-  .header-notices{display:flex;flex-direction:column;gap:5px;align-items:flex-end;max-width:56%;}
+  .header-notices{display:flex;flex-direction:column;gap:4px;align-items:flex-end;max-width:56%;}
   .routine-flag{
-    font-size:11px;line-height:1.4;padding:5px 9px;border-radius:10px;
+    font-size:10px;line-height:1.35;padding:4px 8px;border-radius:9px;
     text-align:right;font-family:'Hind Siliguri',sans-serif;position:relative;
   }
   .routine-flag.today{background:rgba(76,122,93,.28);color:#d9f2e3;border:1px solid var(--sage);}
   .routine-flag.missed{background:rgba(156,91,74,.3);color:#f7ddd5;border:1px solid var(--clay);}
+
+  /* ---- header note bar ---- */
+  .note-bar{
+    position:relative;
+  }
+  .note-bar.has-notes{
+    margin-top:8px;
+  }
+  .note-row{
+    display:flex;align-items:flex-start;gap:7px;
+    padding:3px 0;
+  }
+  .note-row .note-check{
+    flex:0 0 auto;
+    width:17px;height:17px;
+    border-radius:50%;
+    border:1px solid rgba(228,211,174,.6);
+    background:none;
+    color:var(--gold-soft);
+    font-size:10px;line-height:1;
+    display:flex;align-items:center;justify-content:center;
+    cursor:pointer;padding:0;
+  }
+  .note-row .note-check:hover{background:rgba(76,122,93,.35);border-color:var(--sage);}
+  .note-row .note-text{
+    flex:1;min-width:0;
+    font-size:12px;color:var(--parchment-card);
+    line-height:1.4;
+    overflow:hidden;
+    white-space:nowrap;
+    position:relative;
+  }
+  .note-row .note-text .marquee-inner{
+    display:inline-block;
+    will-change:transform;
+  }
+  .note-row .note-text.marquee .marquee-inner{
+    animation-name:note-marquee-scroll;
+    animation-timing-function:ease-in-out;
+    animation-iteration-count:infinite;
+    animation-direction:alternate;
+  }
+  @keyframes note-marquee-scroll{
+    0%{transform:translateX(0);}
+    15%{transform:translateX(0);}
+    85%{transform:translateX(calc(-1 * var(--marquee-dist,0px)));}
+    100%{transform:translateX(calc(-1 * var(--marquee-dist,0px)));}
+  }
+  .note-row .note-more-toggle{
+    flex:0 0 auto;
+    background:none;border:none;
+    color:var(--gold-soft);
+    font-size:10px;font-family:'JetBrains Mono',monospace;font-weight:600;
+    cursor:pointer;padding:2px 4px;line-height:1;
+    white-space:nowrap;
+  }
+  .note-row .note-more-toggle:hover{color:#fff;}
+  .note-dropdown{
+    display:flex;flex-direction:column;
+    margin-top:2px;
+    padding-left:2px;
+    border-left:2px solid rgba(228,211,174,.25);
+  }
+  .note-dropdown .note-text{
+    white-space:normal;
+    overflow:visible;
+  }
+  .note-dropdown .note-row .note-check{opacity:.85;}
+
 
   .rt-type-btn.active{background:var(--ink);color:#fff;}
   .rt-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;}
@@ -292,6 +361,7 @@
       </div>
       <div class="header-notices" id="routineNotices"></div>
     </div>
+    <div class="note-bar" id="noteBar"></div>
   </header>
 
   <nav class="tabs" id="tabs">
@@ -305,6 +375,20 @@
   <main id="main"></main>
 </div>
 <div id="toast"></div>
+
+<!-- header note modal -->
+<div class="modal" id="noteModal">
+  <div class="modal-box">
+    <h3 id="noteModalTitle">নোট যোগ করুন</h3>
+    <label>নোট লিখুন</label>
+    <textarea id="noteTextInput" rows="4" placeholder="যেমন: বাজার থেকে চাল আনতে হবে"></textarea>
+    <label>কবে থেকে দেখাবে</label>
+    <input type="date" id="noteDateInput">
+    <button class="btn full" id="noteSaveBtn">সংরক্ষণ করুন</button>
+    <button class="btn ghost full" id="noteCloseBtn" style="margin-top:8px;">বাতিল</button>
+    <div class="status-msg" id="noteMsg"></div>
+  </div>
+</div>
 
 <!-- qaza calculator modal -->
 <div class="modal" id="qazaModal">
@@ -632,7 +716,7 @@ const DEFAULT_FIREBASE_CONFIG = {
 };
 let firebaseConfig = null;
 let db = null;
-let cache = { finance: [], prayer: [], routine: [], routineLog: [], password: [], qaza: [], ledger: [], cash: [], account: [], transfer: [], customAmal: [], quranConfig: [], quranLog: [], pwConfig: [] };
+let cache = { finance: [], prayer: [], routine: [], routineLog: [], password: [], qaza: [], ledger: [], cash: [], account: [], transfer: [], customAmal: [], quranConfig: [], quranLog: [], pwConfig: [], note: [] };
 let hijriInfo = null;
 let islamicNoticesHtml = { main:'', more:'' };
 let dailyAmalHtml = '';
@@ -705,15 +789,27 @@ function realTodayStr(){
   return `${y}-${m}-${day}`;
 }
 
+// সাইটজুড়ে তারিখ দেখানোর জন্য একক ফরম্যাট: DD/MM/YYYY (তারিখ/মাস/বছর)।
+// ইনপুট হিসেবে 'YYYY-MM-DD' (Firestore/date-input ফরম্যাট) আশা করে; খালি/অবৈধ হলে যা পাওয়া গেছে তাই ফেরত দেয়।
+function fmtDMY(dateStr){
+  if(!dateStr) return '';
+  const parts = String(dateStr).split('-');
+  if(parts.length!==3) return dateStr;
+  const [y,m,d] = parts;
+  if(!y || !m || !d) return dateStr;
+  return `${String(d).padStart(2,'0')}/${String(m).padStart(2,'0')}/${y}`;
+}
+
 function updateHeaderLine(){
   const el = document.getElementById('todayLine');
   if(testDateOverride){
     const d = new Date(testDateOverride+'T00:00:00');
-    el.textContent = '🧪 টেস্ট তারিখ: ' + todayStr() + ' · ' + DAY_NAMES[d.getDay()];
+    el.textContent = '🧪 টেস্ট তারিখ: ' + fmtDMY(todayStr()) + ' · ' + DAY_NAMES[d.getDay()];
   } else {
-    el.textContent = todayStr() + ' · ' + DAY_NAMES[new Date().getDay()];
+    el.textContent = fmtDMY(todayStr()) + ' · ' + DAY_NAMES[new Date().getDay()];
   }
   renderRoutineNotices();
+  renderNoteBar();
 }
 
 /* ---- date-based routine notices shown top-right in the header ---- */
@@ -723,9 +819,7 @@ function daysAgo(dateStr){
   return Math.round((b-a)/86400000);
 }
 function getShortDateLabel(dateStr){
-  const parts = (dateStr||'').split('-').map(Number);
-  if(parts.length!==3 || !parts[1]) return dateStr||'';
-  return toBn(parts[2]) + ' ' + (MONTHS[parts[1]-1]||'');
+  return fmtDMY(dateStr);
 }
 function getDateRoutineNotices(){
   const today = todayStr();
@@ -747,6 +841,126 @@ function renderRoutineNotices(){
     return `<div class="routine-flag missed">⚠️ ${label} "${r['কাজ']||''}" করেননি</div>`;
   }).join('');
 }
+
+/* ---- header note bar: quick personal notes that stay pinned until marked done ---- */
+let noteDropdownOpen = false;
+
+function getActiveNotes(){
+  const today = todayStr();
+  return (cache.note||[])
+    .filter(n=> n['স্ট্যাটাস']!=='সম্পন্ন' && (!n['দেখাবে_তারিখ'] || n['দেখাবে_তারিখ']<=today))
+    .sort((a,b)=> (a['সময়']||'').localeCompare(b['সময়']||''));
+}
+function escapeHtml(s){
+  return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function noteRowHtml(n){
+  return `<div class="note-row">
+    <button class="note-check" data-id="${n['ID']}" title="সম্পন্ন হয়েছে">✓</button>
+    <div class="note-text">${escapeHtml(n['টেক্সট']||'')}</div>
+  </div>`;
+}
+function applyNoteMarquee(){
+  const wrap = document.getElementById('noteBar');
+  if(!wrap) return;
+  const pinnedRow = wrap.querySelector(':scope > .note-row');
+  if(!pinnedRow) return;
+  const el = pinnedRow.querySelector('.note-text');
+  if(!el) return;
+  el.classList.remove('marquee');
+  const inner = el.querySelector('.marquee-inner');
+  if(!inner) return;
+  inner.style.animation = '';
+  const containerWidth = el.clientWidth;
+  const textWidth = inner.scrollWidth;
+  if(textWidth > containerWidth + 2){
+    const dist = textWidth - containerWidth + 6;
+    const duration = Math.max(4, dist/25);
+    inner.style.setProperty('--marquee-dist', dist+'px');
+    inner.style.animationDuration = duration+'s';
+    el.classList.add('marquee');
+  }
+}
+function renderNoteBar(){
+  const wrap = document.getElementById('noteBar');
+  if(!wrap) return;
+  const notes = getActiveNotes();
+  if(!notes.length){
+    wrap.classList.remove('has-notes');
+    wrap.innerHTML = '';
+    return;
+  }
+  wrap.classList.add('has-notes');
+  const first = notes[0];
+  const moreCount = notes.length - 1;
+  let html = `<div class="note-row">
+    <button class="note-check" data-id="${first['ID']}" title="সম্পন্ন হয়েছে">✓</button>
+    <div class="note-text"><span class="marquee-inner">${escapeHtml(first['টেক্সট']||'')}</span></div>
+    ${moreCount>0? `<button class="note-more-toggle" id="noteMoreToggle">${noteDropdownOpen?'▲':`+${toBn(moreCount)} ▾`}</button>` : ''}
+  </div>`;
+  if(moreCount>0){
+    // dropdown-এ সব কয়টা নোট (প্রথমটাসহ) দেখানো হয়, যাতে উপরের নোটটা বড়/স্ক্রল হলেও পুরো লেখাটা এখানে সহজে পড়া যায়
+    html += `<div class="note-dropdown" id="noteDropdown" style="display:${noteDropdownOpen?'flex':'none'}">${notes.map(noteRowHtml).join('')}</div>`;
+  }
+  wrap.innerHTML = html;
+  requestAnimationFrame(applyNoteMarquee);
+}
+
+function openAddNoteModal(){
+  document.getElementById('noteTextInput').value = '';
+  document.getElementById('noteDateInput').value = todayStr();
+  document.getElementById('noteMsg').textContent = '';
+  document.getElementById('noteModal').classList.add('show');
+  setTimeout(()=>document.getElementById('noteTextInput').focus(), 50);
+}
+function refreshNoteUI(){
+  renderNoteBar();
+  if(activeTab==='settings') renderSettings();
+}
+document.getElementById('noteBar').addEventListener('click', async (e)=>{
+  const moreBtn = e.target.closest('#noteMoreToggle');
+  if(moreBtn){ noteDropdownOpen = !noteDropdownOpen; renderNoteBar(); return; }
+  const checkBtn = e.target.closest('.note-check');
+  if(checkBtn){
+    const id = checkBtn.dataset.id;
+    const note = cache.note.find(n=>n['ID']===id);
+    if(!note) return;
+    checkBtn.disabled = true;
+    try{
+      await apiPost('নোট','update', id, {'স্ট্যাটাস':'সম্পন্ন'});
+      note['স্ট্যাটাস'] = 'সম্পন্ন';
+      refreshNoteUI();
+      toast('নোট সম্পন্ন হিসেবে চিহ্নিত হলো');
+    }catch(err){ toast('হালনাগাদ ব্যর্থ হয়েছে'); checkBtn.disabled = false; }
+    return;
+  }
+});
+document.getElementById('noteCloseBtn').addEventListener('click', ()=>{
+  document.getElementById('noteModal').classList.remove('show');
+});
+document.getElementById('noteSaveBtn').addEventListener('click', async ()=>{
+  const btn = document.getElementById('noteSaveBtn');
+  const msg = document.getElementById('noteMsg');
+  const text = document.getElementById('noteTextInput').value.trim();
+  const showDate = document.getElementById('noteDateInput').value || todayStr();
+  if(!text){ msg.textContent = 'নোট লিখুন'; msg.className = 'status-msg err'; return; }
+  if(btn.disabled) return;
+  btn.disabled = true;
+  try{
+    const now = new Date().toISOString();
+    const data = {'টেক্সট': text, 'সময়': now, 'স্ট্যাটাস': 'বাকি', 'দেখাবে_তারিখ': showDate};
+    const res = await apiPost('নোট','add', null, data);
+    cache.note.push({'ID': res.id, ...data});
+    document.getElementById('noteModal').classList.remove('show');
+    refreshNoteUI();
+    toast(showDate>todayStr() ? 'নোট যোগ হয়েছে, ' + fmtDMY(showDate) + ' থেকে দেখাবে' : 'নোট যোগ হয়েছে');
+  }catch(err){
+    msg.textContent = 'সংরক্ষণ ব্যর্থ হয়েছে'; msg.className = 'status-msg err';
+  }finally{
+    btn.disabled = false;
+  }
+});
+
 
 function toast(msg){
   const t = document.getElementById('toast');
@@ -883,8 +1097,8 @@ async function dedupePrayerRecords(){
 
 async function refreshAll(){
   if(!db) return;
-  const sheets = ['হিসাব','নামাজ','রুটিন','রুটিন_লগ','পাসওয়ার্ড','কাজা','লেনদেন','ক্যাশ','অ্যাকাউন্ট','স্থানান্তর','কাস্টম_আমল','কুরআন_কনফিগ','কুরআন_লগ','পাসওয়ার্ড_কনফিগ'];
-  const keys = ['finance','prayer','routine','routineLog','password','qaza','ledger','cash','account','transfer','customAmal','quranConfig','quranLog','pwConfig'];
+  const sheets = ['হিসাব','নামাজ','রুটিন','রুটিন_লগ','পাসওয়ার্ড','কাজা','লেনদেন','ক্যাশ','অ্যাকাউন্ট','স্থানান্তর','কাস্টম_আমল','কুরআন_কনফিগ','কুরআন_লগ','পাসওয়ার্ড_কনফিগ','নোট'];
+  const keys = ['finance','prayer','routine','routineLog','password','qaza','ledger','cash','account','transfer','customAmal','quranConfig','quranLog','pwConfig','note'];
   const results = await Promise.allSettled(sheets.map(s=>apiGet(s)));
   let anyFail = false;
   results.forEach((r,i)=>{
@@ -1064,7 +1278,7 @@ function showPersonHistory(name){
       ? (r['ধরন']==='দেনাদার' ? 'ধার দিলাম' : 'ধার নিলাম')
       : (r['ধরন']==='দেনাদার' ? 'ফেরত পেলাম' : 'ফেরত দিলাম');
     return `<div style="padding:8px 0;border-bottom:1px dashed var(--rule);display:flex;justify-content:space-between;align-items:center;">
-      <div><div>${label}${r['নোট']?' — '+r['নোট']:''}</div><div style="font-size:12px;color:var(--muted)">${r['তারিখ']||''} ${r['সময়']||''}</div></div>
+      <div><div>${label}${r['নোট']?' — '+r['নোট']:''}</div><div style="font-size:12px;color:var(--muted)">${fmtDMY(r['তারিখ'])} ${r['সময়']||''}</div></div>
       <div class="amt">৳${r['পরিমাণ']}</div>
     </div>`;
   }).join('') || '<div class="empty">কোনো লেনদেন নেই</div>';
@@ -1246,7 +1460,7 @@ function renderFinance(){
         <div class="ledger-row">
           <div>
             <span class="person-name" data-name="${r.name}" style="cursor:pointer">${r.name}</span>
-            <div class="ledger-meta">${r.type==='receivable'?'ওর কাছ থেকে পাওনা':'ওকে দিতে হবে'} — ফেরতের কথা ছিল ${r.due} ${r.overdue?'<b style="color:var(--clay)">(মেয়াদ পার হয়ে গেছে)</b>':'(আজ)'}</div>
+            <div class="ledger-meta">${r.type==='receivable'?'ওর কাছ থেকে পাওনা':'ওকে দিতে হবে'} — ফেরতের কথা ছিল ${fmtDMY(r.due)} ${r.overdue?'<b style="color:var(--clay)">(মেয়াদ পার হয়ে গেছে)</b>':'(আজ)'}</div>
           </div>
           <div style="display:flex;align-items:center;gap:8px;">
             <span class="amt ${r.type==='receivable'?'income':'expense'}">৳${fmtAmt(Math.abs(r.bal))}</span>
@@ -1415,7 +1629,7 @@ function renderFinance(){
           <div class="ledger-row">
             <div>
               <div>${t['থেকে']||''} → ${t['যেখানে']||''} ${t['নোট']? '<span class="ledger-meta">— '+t['নোট']+'</span>':''}</div>
-              <div class="ledger-meta">${t['তারিখ']||''}</div>
+              <div class="ledger-meta">${fmtDMY(t['তারিখ'])}</div>
             </div>
             <div style="display:flex;align-items:center;gap:8px;">
               <span class="amt">৳${fmtAmt(Number(t['পরিমাণ'])||0)}</span>
@@ -1513,7 +1727,7 @@ function renderFinance(){
     body.innerHTML = shown.length ? '' : `<tr><td colspan="3" style="padding:14px;color:var(--muted)">এই তারিখের মধ্যে কোনো কার্যক্রম নেই</td></tr>`;
     shown.forEach(it=>{
       const tr = document.createElement('tr');
-      tr.innerHTML = `<td class="dt">${it.date}</td>
+      tr.innerHTML = `<td class="dt">${fmtDMY(it.date)}</td>
         <td>${it.desc}${it.meta? ' <span class="ledger-meta">· '+it.meta+'</span>':''}</td>
         <td style="text-align:right;" class="amt ${it.cls}">${it.sign}৳${fmtAmt(it.amount)}</td>`;
       body.appendChild(tr);
@@ -1603,7 +1817,7 @@ function renderFinance(){
       div.innerHTML = `
         <div>
           <div>${r['ক্যাটাগরি']||''} ${r['নোট']? '<span class="ledger-meta">— '+r['নোট']+'</span>':''}</div>
-          <div class="ledger-meta">${r['তারিখ']||''}${r['অ্যাকাউন্ট'] && r['অ্যাকাউন্ট']!=='ক্যাশ' ? ' · '+r['অ্যাকাউন্ট'] : ''}</div>
+          <div class="ledger-meta">${fmtDMY(r['তারিখ'])}${r['অ্যাকাউন্ট'] && r['অ্যাকাউন্ট']!=='ক্যাশ' ? ' · '+r['অ্যাকাউন্ট'] : ''}</div>
         </div>
         <div style="display:flex;align-items:center;gap:8px;">
           <span class="amt ${r['ধরন']==='আয়'?'income':'expense'}">${r['ধরন']==='আয়'?'+':'−'}৳${r['পরিমাণ']}</span>
@@ -1672,7 +1886,7 @@ function renderFinance(){
       div.innerHTML = `
         <div>
           <div>${r['নাম']||''} <span class="ledger-meta">— ${label}</span></div>
-          <div class="ledger-meta">${r['তারিখ']||''} ${r['সময়']||''}</div>
+          <div class="ledger-meta">${fmtDMY(r['তারিখ'])} ${r['সময়']||''}</div>
         </div>
         <div style="display:flex;align-items:center;gap:8px;">
           <span class="amt ${r['লেনদেন']==='বৃদ্ধি'?'income':'expense'}">৳${r['পরিমাণ']}</span>
@@ -1861,7 +2075,7 @@ function printFinanceReport(rows, period){
   const title = period ? (period==='year' ? 'বাৎসরিক রিপোর্ট '+todayStr().slice(0,4) : 'মাসিক রিপোর্ট — '+getMonthLabel(period)) : 'মাসিক রিপোর্ট (চলতি মাস)';
   const rowsHtml = rows.map(r=>`
     <tr>
-      <td>${r['তারিখ']||''}</td>
+      <td>${fmtDMY(r['তারিখ'])}</td>
       <td>${r['ধরন']||''}</td>
       <td>${r['ক্যাটাগরি']||''}</td>
       <td class="amt-col">৳${fmtAmt(Number(r['পরিমাণ'])||0)}</td>
@@ -2024,7 +2238,7 @@ function renderEntriesView(type, cat, ym){
   const rowsHtml = rows.map(r=>`
     <div class="ledger-row">
       <div>
-        <div>${r['তারিখ']||''}</div>
+        <div>${fmtDMY(r['তারিখ'])}</div>
         ${r['নোট']? `<div class="ledger-meta">${r['নোট']}</div>`:''}
       </div>
       <span class="amt ${cls}">৳${r['পরিমাণ']}</span>
@@ -2287,7 +2501,7 @@ function renderPrayer(){
             ${quranHeatmap.map(h=>{
               const intensity = h.pages===0 ? 0 : Math.min(1, h.pages/quranHeatmapMax);
               const bg = h.pages===0 ? 'var(--rule)' : `rgba(138,154,91,${(0.25+intensity*0.75).toFixed(2)})`;
-              return `<div title="${h.date}: ${toBn(h.pages)} পৃষ্ঠা" style="aspect-ratio:1;border-radius:4px;background:${bg};display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--muted);">${toBn(h.day)}</div>`;
+              return `<div title="${fmtDMY(h.date)}: ${toBn(h.pages)} পৃষ্ঠা" style="aspect-ratio:1;border-radius:4px;background:${bg};display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--muted);">${toBn(h.day)}</div>`;
             }).join('')}
           </div>
         </div>
@@ -2302,7 +2516,7 @@ function renderPrayer(){
             <div style="font-size:11px;color:var(--muted);">এই মাসে পড়েছেন যত দিন</div>
           </div>
         </div>
-        ${quranMonthStats.bestDay ? `<div class="ledger-meta" style="margin-top:8px;text-align:center;">🏆 সেরা দিন: ${quranMonthStats.bestDay.date} — ${toBn(quranMonthStats.bestDay.pages)} পৃষ্ঠা</div>` : ''}
+        ${quranMonthStats.bestDay ? `<div class="ledger-meta" style="margin-top:8px;text-align:center;">🏆 সেরা দিন: ${fmtDMY(quranMonthStats.bestDay.date)} — ${toBn(quranMonthStats.bestDay.pages)} পৃষ্ঠা</div>` : ''}
 
         <div style="margin-top:18px;">
           <div class="ledger-meta" style="margin-bottom:6px;">সাম্প্রতিক লগ</div>
@@ -2311,7 +2525,7 @@ function renderPrayer(){
               <div class="ledger-row">
                 <div>
                   <div>পৃষ্ঠা ${toBn(l['শুরু'])} – ${toBn(l['শেষ'])}</div>
-                  <div class="ledger-meta">${l['তারিখ']}</div>
+                  <div class="ledger-meta">${fmtDMY(l['তারিখ'])}</div>
                 </div>
                 <div style="display:flex;align-items:center;gap:8px;">
                   <span class="amt">${toBn(Math.max(0,(Number(l['শেষ'])||0)-(Number(l['শুরু'])||0)+1))} পৃষ্ঠা</span>
@@ -2477,7 +2691,7 @@ function renderPrayer(){
   customAmalListEl.innerHTML = sortedCustomAmal.length ? '<div style="font-size:12px;color:var(--muted);margin-bottom:6px;">সংরক্ষিত আমল</div>' : '<div class="empty">এখনো কোনো আমল সেট করা হয়নি</div>';
   sortedCustomAmal.forEach(a=>{
     const repeats = a['পুনরাবৃত্তি']===true || a['পুনরাবৃত্তি']==='true';
-    const hijriLabel = repeats ? `প্রতি বছর — হিজরি ${toBn(a['হিজরি_দিন']||'')} ${HIJRI_MONTHS[(Number(a['হিজরি_মাস'])||1)-1]||''}` : (a['তারিখ']||'');
+    const hijriLabel = repeats ? `প্রতি বছর — হিজরি ${toBn(a['হিজরি_দিন']||'')} ${HIJRI_MONTHS[(Number(a['হিজরি_মাস'])||1)-1]||''}` : fmtDMY(a['তারিখ']);
     const div = document.createElement('div');
     div.className = 'ledger-row';
     div.innerHTML = `
@@ -2563,11 +2777,11 @@ function renderAmalHistoryMonth(){
     const r = byDate[dateStr];
     const tr = document.createElement('tr');
     if(r){
-      tr.innerHTML = `<td class="dt">${dateStr}</td>${PRAYERS.map(p=>`<td>${badgeFor(r[p])}</td>`).join('')}<td>${pagesReadOn(dateStr)>0? '📖':'–'}</td>`;
+      tr.innerHTML = `<td class="dt">${fmtDMY(dateStr)}</td>${PRAYERS.map(p=>`<td>${badgeFor(r[p])}</td>`).join('')}<td>${pagesReadOn(dateStr)>0? '📖':'–'}</td>`;
       tr.style.cursor='pointer';
       tr.addEventListener('click', ()=>showDayDetails(r));
     } else {
-      tr.innerHTML = `<td class="dt">${dateStr}</td>${PRAYERS.map(()=>`<td style="color:var(--muted)">–</td>`).join('')}<td style="color:var(--muted)">–</td>`;
+      tr.innerHTML = `<td class="dt">${fmtDMY(dateStr)}</td>${PRAYERS.map(()=>`<td style="color:var(--muted)">–</td>`).join('')}<td style="color:var(--muted)">–</td>`;
       tr.style.opacity = '0.6';
     }
     hb.appendChild(tr);
@@ -2578,7 +2792,7 @@ function renderAmalHistoryMonth(){
 }
 
 function showDayDetails(r){
-  document.getElementById('detailsTitle').textContent = r['তারিখ'];
+  document.getElementById('detailsTitle').textContent = fmtDMY(r['তারিখ']);
   const yesterdayD = todayStr(new Date(new Date(todayStr()+'T00:00:00').getTime() - 86400000));
   const editable = (r['তারিখ']===todayStr() || r['তারিখ']===yesterdayD);
   let html = '';
@@ -2606,7 +2820,7 @@ function showDayDetails(r){
   });
   const delBtn = document.getElementById('deleteDayRecordBtn');
   if(delBtn) delBtn.addEventListener('click', async ()=>{
-    if(!confirm(r['তারিখ'] + ' — এই তারিখের পুরো এন্ট্রিটা মুছে ফেলতে চান? এটা ফেরত আনা যাবে না।')) return;
+    if(!confirm(fmtDMY(r['তারিখ']) + ' — এই তারিখের পুরো এন্ট্রিটা মুছে ফেলতে চান? এটা ফেরত আনা যাবে না।')) return;
     try{
       await apiPost('নামাজ','delete', r['ID']);
       cache.prayer = cache.prayer.filter(x=>x['ID']!==r['ID']);
@@ -3234,8 +3448,8 @@ function renderRoutineHistoryFor(dateStr){
   let extraHtml = '';
   extraHtml += section('⚠️ করেননি', missed, l=>`<div class="notice-item">${l['কাজ']}</div>`);
   extraHtml += section('🚫 বাতিল করেছিলেন', skipped, l=>`<div class="notice-item">${l['কাজ']}</div>`);
-  extraHtml += section('📅 এই তারিখ থেকে পিছিয়েছেন', postponedFrom, l=>`<div class="notice-item">${l['কাজ']} → ${l['নতুন_তারিখ']}${l['নোট']?`<div class="notice-sub">কারণ: ${l['নোট']}</div>`:''}</div>`);
-  extraHtml += section('↪️ এই তারিখের জন্য পেছানো হয়েছিল', postponedTo, l=>`<div class="notice-item">${l['কাজ']} (আগের তারিখ ছিল ${l['তারিখ']})${l['নোট']?`<div class="notice-sub">কারণ: ${l['নোট']}</div>`:''}</div>`);
+  extraHtml += section('📅 এই তারিখ থেকে পিছিয়েছেন', postponedFrom, l=>`<div class="notice-item">${l['কাজ']} → ${fmtDMY(l['নতুন_তারিখ'])}${l['নোট']?`<div class="notice-sub">কারণ: ${l['নোট']}</div>`:''}</div>`);
+  extraHtml += section('↪️ এই তারিখের জন্য পেছানো হয়েছিল', postponedTo, l=>`<div class="notice-item">${l['কাজ']} (আগের তারিখ ছিল ${fmtDMY(l['তারিখ'])})${l['নোট']?`<div class="notice-sub">কারণ: ${l['নোট']}</div>`:''}</div>`);
 
   body.innerHTML = `<div style="font-weight:600;color:var(--ink);margin-bottom:8px;">${dayName}-এর কাজ</div>` + tasksHtml + extraHtml;
 
@@ -3377,7 +3591,7 @@ function renderRoutine(){
         <tbody>${dateItems.map(r=>{
           const pCount = getPostponeCount(r['ID']);
           return `<tr data-id="${r['ID']}">
-            <td>${r['তারিখ']||''}${r['সময়']? `<br><span style="font-size:11px;color:var(--muted)">${r['সময়']}</span>`:''}</td>
+            <td>${fmtDMY(r['তারিখ'])}${r['সময়']? `<br><span style="font-size:11px;color:var(--muted)">${r['সময়']}</span>`:''}</td>
             <td>${r['কাজ']||''}${pCount? `<div class="postpone-meta" style="font-size:11px;">${toBn(pCount)} বার পিছানো হয়েছে</div>`:''}</td>
             <td style="text-align:center;"><button type="button" class="btn small ghost rt-date-act-btn" data-id="${r['ID']}">⋯</button></td>
           </tr>`;
@@ -3785,6 +3999,12 @@ function renderSettings(){
     </div>
   `;
   main.innerHTML = `
+    <div class="card">
+      <h2>🗒️ নোট</h2>
+      <p style="font-size:13px;color:var(--muted);margin:0 0 8px;">উপরে হেডারে দেখানোর জন্য একটা ছোট নোট যোগ করুন — যতদিন না "সম্পন্ন" হিসেবে চিহ্নিত করবেন, ততদিন এটা হেডারে দেখাতে থাকবে।</p>
+      ${getActiveNotes().length? `<p style="font-size:12px;color:var(--sage);margin:0 0 8px;">এখন ${toBn(getActiveNotes().length)}টি নোট সক্রিয় আছে</p>` : ''}
+      <button class="btn full" id="settingsAddNoteBtn">+ নতুন নোট যোগ করুন</button>
+    </div>
     ${installCardHtml}
     <div class="card">
       <h2>🧪 তারিখ টেস্ট করুন</h2>
@@ -3794,7 +4014,7 @@ function renderSettings(){
         <button class="btn small" id="setTestDate" style="flex:1;">টেস্ট তারিখ সেট করুন</button>
         <button class="btn ghost small" id="clearTestDate" style="flex:1;">আসল তারিখে ফিরুন</button>
       </div>
-      ${testDateOverride? `<div class="status-msg ok">এখন টেস্ট তারিখ সক্রিয়: ${testDateOverride}</div>` : ''}
+      ${testDateOverride? `<div class="status-msg ok">এখন টেস্ট তারিখ সক্রিয়: ${fmtDMY(testDateOverride)}</div>` : ''}
     </div>
     <div class="card">
       <h2>Firebase সংযোগ</h2>
@@ -3833,6 +4053,7 @@ service cloud.firestore {
 }</pre>
     </div>
   `;
+  document.getElementById('settingsAddNoteBtn').addEventListener('click', openAddNoteModal);
   const pwaInstallBtn = document.getElementById('pwaInstallBtn');
   if(pwaInstallBtn){
     pwaInstallBtn.addEventListener('click', async ()=>{
@@ -3851,7 +4072,7 @@ service cloud.firestore {
     await localSet('testDateOverride', val);
     updateHeaderLine();
     renderSettings();
-    toast('টেস্ট তারিখ সক্রিয় হয়েছে: ' + val);
+    toast('টেস্ট তারিখ সক্রিয় হয়েছে: ' + fmtDMY(val));
   });
   document.getElementById('clearTestDate').addEventListener('click', async ()=>{
     testDateOverride = null;
