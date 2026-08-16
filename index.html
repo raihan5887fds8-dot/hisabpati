@@ -352,6 +352,34 @@
   table.amal-table th{background:var(--ink);color:#fff;padding:6px 4px;font-weight:600;}
   table.amal-table td{padding:6px 4px;text-align:center;border-bottom:1px solid var(--rule);}
   table.amal-table td.dt{font-family:'JetBrains Mono',monospace;text-align:left;font-size:11px;}
+
+  /* ---------- বাজার (মার্কেট) পেইজ ---------- */
+  .market-progress-wrap{margin-top:10px;}
+  .market-progress-track{background:#fff;border:1px solid var(--rule);border-radius:6px;height:8px;overflow:hidden;}
+  .market-progress-fill{height:100%;background:linear-gradient(90deg,var(--gold),var(--sage));border-radius:6px;transition:width .3s;}
+  .market-progress-lbl{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace;margin-top:4px;}
+  .market-item-row{padding:10px 0;border-bottom:1px dashed var(--rule);}
+  .market-item-row:last-child{border-bottom:none;}
+  .market-item-top{display:flex;align-items:center;gap:8px;}
+  .market-item-emoji{font-size:17px;flex:0 0 auto;line-height:1;}
+  .market-item-name{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;}
+  .market-item-name.bought{text-decoration:line-through;color:var(--muted);font-weight:400;}
+  .market-item-toggle{cursor:pointer;user-select:none;}
+  .market-item-caret{font-size:10px;color:var(--muted);margin-left:1px;}
+  .market-item-grid{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;margin-top:6px;}
+  .market-item-grid.collapsed{display:none;}
+  .market-item-grid input, .market-item-grid select{padding:6px 6px;font-size:12px;width:100%;}
+  .market-item-grid .market-item-total-input{text-align:right;font-weight:600;}
+  .market-trend{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;flex:0 0 auto;padding:1px 6px;border-radius:8px;white-space:nowrap;}
+  .market-trend.up{color:var(--clay);background:rgba(156,91,74,.12);}
+  .market-trend.down{color:var(--sage);background:rgba(76,122,93,.12);}
+  .market-chip{display:inline-flex;flex-direction:column;align-items:flex-start;gap:1px;background:#fff;border:1px solid var(--rule);border-radius:8px;padding:6px 10px;cursor:pointer;transition:border-color .15s,background .15s;}
+  .market-chip:hover{border-color:var(--gold);background:var(--gold-soft);}
+  .market-chip .mc-name{font-size:13px;font-weight:600;display:flex;align-items:center;gap:5px;}
+  .market-chip .mc-price{font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace;}
+  .market-stat-bar{display:flex;gap:10px;margin-bottom:2px;}
+  .market-history-row .mh-emoji-strip{font-size:12px;letter-spacing:1px;color:var(--muted);}
+  .market-history-row .mh-trend{font-size:11px;font-family:'JetBrains Mono',monospace;font-weight:700;}
 </style>
 </head>
 <body>
@@ -371,6 +399,7 @@
     <button data-tab="finance" class="active">হিসাব</button>
     <button data-tab="prayer">নামাজ</button>
     <button data-tab="routine">রুটিন</button>
+    <button data-tab="market">বাজার</button>
     <button data-tab="password">পাসওয়ার্ড</button>
     <button data-tab="settings">সেটিংস</button>
   </nav>
@@ -620,6 +649,23 @@
   </div>
 </div>
 
+<!-- market quick-add quantity modal -->
+<div class="modal" id="marketQuickAddModal">
+  <div class="modal-box"><button type="button" class="modal-x-close" aria-label="বন্ধ করুন" onclick="this.closest('.modal').querySelector('[id$=CloseBtn],[data-close-modal],[id$=CancelBtn]')?.click()">✕</button>
+    <h3 id="marketQuickAddTitle">আইটেম যোগ করুন</h3>
+    <p id="marketQuickAddHint" style="font-size:12px;color:var(--muted);margin:0 0 10px;"></p>
+    <label>কতটুকু কিনতে হবে?</label>
+    <div style="display:flex;gap:8px;">
+      <input type="number" step="any" min="0" id="marketQuickAddQtyInput" placeholder="পরিমাণ" style="flex:1;">
+      <select id="marketQuickAddUnitSelect" style="flex:1;">
+        <option value="">একক বেছে নিন</option>
+      </select>
+    </div>
+    <button class="btn full" id="marketQuickAddConfirmBtn" style="margin-top:12px;">তালিকায় যোগ করুন</button>
+    <button class="btn ghost full" id="marketQuickAddCloseBtn" style="margin-top:8px;">বাতিল</button>
+  </div>
+</div>
+
 <!-- Firebase SDK (compat build: works with a plain <script>, no build tools needed) -->
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
@@ -737,7 +783,7 @@ const DEFAULT_FIREBASE_CONFIG = {
 };
 let firebaseConfig = null;
 let db = null;
-let cache = { finance: [], prayer: [], routine: [], routineLog: [], password: [], qaza: [], ledger: [], cash: [], account: [], transfer: [], customAmal: [], quranConfig: [], quranLog: [], pwConfig: [], note: [] };
+let cache = { finance: [], prayer: [], routine: [], routineLog: [], password: [], qaza: [], ledger: [], cash: [], account: [], transfer: [], customAmal: [], quranConfig: [], quranLog: [], pwConfig: [], note: [], market: [] };
 let hijriInfo = null;
 let islamicNoticesHtml = { main:'', more:'' };
 let dailyAmalHtml = '';
@@ -753,6 +799,12 @@ let finFilter = { cat:'', from:'', to:'', minAmt:'', maxAmt:'', q:'' };
 let ledgerFilter = { name:'', type:'', from:'', to:'', minAmt:'', maxAmt:'' };
 let openFinanceModal = null; // ফিনান্স পেইজের কোন পপআপ খোলা আছে তা মনে রাখে (রি-রেন্ডারের পরও খোলা থাকে)
 let reportPeriod = null; // null হলে ডিফল্ট (চলতি মাস); নাহলে 'YYYY-MM' বা 'YYYY' (সম্পূর্ণ বছর)
+let marketFinalizeOpen = false; // বাজার ট্যাবে "সম্পন্ন করুন" প্যানেলটা খোলা আছে কিনা
+let marketAddFormOpen = false; // বাজার ট্যাবে "+ যোগ করুন" চাপার পর আইটেম যোগ করার ইনপুট ফিল্ডগুলো দেখানো হচ্ছে কিনা
+let marketExpandedItems = new Set(); // বাজারের কোন আইটেম-রো'র দাম/পরিমাণ/একক/মোট ফিল্ডগুলো খোলা (ড্রপডাউন) আছে তা মনে রাখে
+let marketPaymentSplits = []; // বাজার সম্পন্ন করার সময় একাধিক মাধ্যমে (অ্যাকাউন্ট/ধার) ভাগ করে পরিশোধের তালিকা: [{id,type:'account'|'ধার',account,person,amount}]
+let marketFinalTotal = 0; // finalize প্যানেলে "চূড়ান্ত মোট খরচ" এর সর্বশেষ মান — পরিশোধের "বাকি" হিসাব করতে ব্যবহার হয়
+const MARKET_DIRECT_BORROW_TAG = 'ধার (সরাসরি পরিশোধ)'; // কোনো "আসল" অ্যাকাউন্ট নয় — বাজারের কোনো অংশ ধার নিয়ে সরাসরি পরিশোধ করা হলে তা চিহ্নিত করতে ব্যবহৃত হয়, যাতে কোনো অ্যাকাউন্ট/ক্যাশ ব্যালেন্স ভুল করে বদলে না যায়
 
 /* Google Sheets sometimes silently converts a typed "HH:MM" or "YYYY-MM-DD" value
    into a real Date cell. When that comes back through the API as JSON, Date objects
@@ -1118,8 +1170,8 @@ async function dedupePrayerRecords(){
 
 async function refreshAll(){
   if(!db) return;
-  const sheets = ['হিসাব','নামাজ','রুটিন','রুটিন_লগ','পাসওয়ার্ড','কাজা','লেনদেন','ক্যাশ','অ্যাকাউন্ট','স্থানান্তর','কাস্টম_আমল','কুরআন_কনফিগ','কুরআন_লগ','পাসওয়ার্ড_কনফিগ','নোট'];
-  const keys = ['finance','prayer','routine','routineLog','password','qaza','ledger','cash','account','transfer','customAmal','quranConfig','quranLog','pwConfig','note'];
+  const sheets = ['হিসাব','নামাজ','রুটিন','রুটিন_লগ','পাসওয়ার্ড','কাজা','লেনদেন','ক্যাশ','অ্যাকাউন্ট','স্থানান্তর','কাস্টম_আমল','কুরআন_কনফিগ','কুরআন_লগ','পাসওয়ার্ড_কনফিগ','নোট','বাজার'];
+  const keys = ['finance','prayer','routine','routineLog','password','qaza','ledger','cash','account','transfer','customAmal','quranConfig','quranLog','pwConfig','note','market'];
   const results = await Promise.allSettled(sheets.map(s=>apiGet(s)));
   let anyFail = false;
   results.forEach((r,i)=>{
@@ -1152,6 +1204,7 @@ function render(){
   if(activeTab==='finance') renderFinance();
   else if(activeTab==='prayer') renderPrayer();
   else if(activeTab==='routine') renderRoutine();
+  else if(activeTab==='market') renderMarket();
   else if(activeTab==='password') renderPassword();
   else if(activeTab==='settings') renderSettings();
 }
@@ -1216,6 +1269,7 @@ function getAccountBalance(name){
   return rec ? Number(rec['ব্যালেন্স'])||0 : 0;
 }
 async function applyAccountDelta(name, delta){
+  if(name===MARKET_DIRECT_BORROW_TAG) return; // ধার নিয়ে সরাসরি পরিশোধ করা অংশ — কোনো অ্যাকাউন্ট/ক্যাশে হাত দেওয়া হবে না
   if(!delta) return;
   if(!name || name==='ক্যাশ'){ await setCashTotal(getCashTotal()+delta); return; }
   const rec = cache.account.find(a=>(a['নাম']||'').trim()===name);
@@ -1378,7 +1432,8 @@ function buildFinanceActivities(){
       meta: r['অ্যাকাউন্ট'] && r['অ্যাকাউন্ট']!=='ক্যাশ' ? r['অ্যাকাউন্ট'] : '',
       amount: Number(r['পরিমাণ'])||0,
       sign: financeTypeSign(r['ধরন']),
-      cls: financeTypeClass(r['ধরন'])
+      cls: financeTypeClass(r['ধরন']),
+      marketId: r['বাজার_আইডি'] || null
     });
   });
   cache.ledger.forEach(r=>{
@@ -1392,7 +1447,8 @@ function buildFinanceActivities(){
       meta: r['অ্যাকাউন্ট'] && r['অ্যাকাউন্ট']!=='ক্যাশ' ? r['অ্যাকাউন্ট'] : '',
       amount: Number(r['পরিমাণ'])||0,
       sign: r['লেনদেন']==='বৃদ্ধি' ? '+' : '−',
-      cls: r['লেনদেন']==='বৃদ্ধি' ? 'income' : 'expense'
+      cls: r['লেনদেন']==='বৃদ্ধি' ? 'income' : 'expense',
+      marketId: r['বাজার_আইডি'] || null
     });
   });
   cache.transfer.forEach(t=>{
@@ -1770,10 +1826,16 @@ function renderFinance(){
     body.innerHTML = shown.length ? '' : `<tr><td colspan="3" style="padding:14px;color:var(--muted)">এই তারিখের মধ্যে কোনো কার্যক্রম নেই</td></tr>`;
     shown.forEach(it=>{
       const tr = document.createElement('tr');
+      const descHtml = it.marketId
+        ? `<span class="fin-market-link" data-market-id="${it.marketId}" style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;">${it.desc}</span>`
+        : it.desc;
       tr.innerHTML = `<td class="dt">${fmtDMY(it.date)}</td>
-        <td>${it.desc}${it.meta? ' <span class="ledger-meta">· '+it.meta+'</span>':''}</td>
+        <td>${descHtml}${it.meta? ' <span class="ledger-meta">· '+it.meta+'</span>':''}</td>
         <td style="text-align:right;" class="amt ${it.cls}">${it.sign}৳${fmtAmt(it.amount)}</td>`;
       body.appendChild(tr);
+    });
+    body.querySelectorAll('.fin-market-link').forEach(el=>{
+      el.addEventListener('click', ()=>showMarketHistoryDetail(el.dataset.marketId));
     });
     if(moreBtn){
       moreBtn.style.display = allActivities.length > financeHistoryLimit ? 'block' : 'none';
@@ -2292,6 +2354,633 @@ function renderEntriesView(type, cat, ym){
   document.getElementById('detailsBody').innerHTML = backHtml + totalHtml + rowsHtml;
   document.getElementById('detailsModal').classList.add('show');
   document.querySelector('#detailsBody .back-to-categories').addEventListener('click', ()=>renderCategoriesView(type, ym));
+}
+
+/* ---------------- MARKET (বাজার) ---------------- */
+// একটা "বাজার" ডকুমেন্ট মানে একটা বাজারের ট্রিপ/তালিকা — যতক্ষণ না "সম্পন্ন" করা হচ্ছে,
+// ততক্ষণ সেটা "চলমান" থাকে এবং আইটেম যোগ/বাদ/টিক দেওয়া যায়। সম্পন্ন করলে ফিনান্সে
+// "বাজার" ক্যাটাগরিতে একটা খরচের এন্ট্রি অটো তৈরি হয় এবং অ্যাকাউন্ট ব্যালেন্স থেকে বিয়োগ হয়।
+
+function getActiveMarketList(){
+  return [...cache.market].filter(m=>m['অবস্থা']!=='সম্পন্ন')
+    .sort((a,b)=>(b['তারিখ_শুরু']||'').localeCompare(a['তারিখ_শুরু']||''))[0] || null;
+}
+function getCompletedMarketLists(){
+  return [...cache.market].filter(m=>m['অবস্থা']==='সম্পন্ন')
+    .sort((a,b)=>(b['তারিখ_শেষ']||b['তারিখ_শুরু']||'').localeCompare(a['তারিখ_শেষ']||a['তারিখ_শুরু']||''));
+}
+// একটা আইটেমের মোট দাম বের করে — নতুন আইটেমে সরাসরি 'মোট' ফিল্ড থাকে,
+// পুরনো (আগের ফরম্যাটের) আইটেমে শুধু 'দাম' থাকতে পারে, তাই ফলব্যাক রাখা হলো
+function itemTotalPrice(it){
+  if(it['মোট']!=null && it['মোট']!=='') return Number(it['মোট'])||0;
+  return Number(it['দাম'])||0;
+}
+function marketListTotals(list){
+  const items = list['আইটেম']||[];
+  const estTotal = items.reduce((s,it)=>s+itemTotalPrice(it),0);
+  const boughtItems = items.filter(it=>it['কেনা']);
+  const boughtTotal = boughtItems.reduce((s,it)=>s+itemTotalPrice(it),0);
+  return { estTotal, boughtTotal, boughtCount: boughtItems.length, itemCount: items.length };
+}
+// প্রতিটা আইটেমের নাম ধরে কতবার "সম্পন্ন" বাজারে কেনা হয়েছে, আর সর্বশেষ ও তার আগের
+// পরিমাণ/দাম/মোট কত ছিল — তা বের করে (কুইক-অ্যাড চিপ, "গতবার" হিন্ট আর দামের ট্রেন্ড তীর দেখানোর জন্য)।
+// শুধু "সম্পন্ন" হওয়া বাজার থেকেই হিসাব হয় — চলমান তালিকায় এইমাত্র টাইপ করা দাম যেন নিজের
+// সাথেই তুলনা না হয়ে যায়।
+function marketItemStats(){
+  const map = {};
+  [...cache.market].filter(m=>m['অবস্থা']==='সম্পন্ন')
+    .sort((a,b)=>(a['তারিখ_শেষ']||a['তারিখ_শুরু']||'').localeCompare(b['তারিখ_শেষ']||b['তারিখ_শুরু']||''))
+    .forEach(m=>{
+    (m['আইটেম']||[]).forEach(it=>{
+      const name = (it['নাম']||'').trim(); if(!name) return;
+      if(!map[name]) map[name] = { count:0, qty:'', price:0, prevPrice:0, total:0, unit:'', lastDate:'' };
+      map[name].count++;
+      if(it['পরিমাণ']) map[name].qty = it['পরিমাণ'];
+      if(Number(it['দাম'])>0){
+        if(map[name].price>0) map[name].prevPrice = map[name].price;
+        map[name].price = Number(it['দাম']);
+      }
+      if(it['একক']) map[name].unit = it['একক'];
+      const tot = itemTotalPrice(it);
+      if(tot>0) map[name].total = tot;
+      map[name].lastDate = m['তারিখ_শেষ']||m['তারিখ_শুরু']||'';
+    });
+  });
+  return map;
+}
+// নাম দেখে সাধারণ মুদি-বাজারের আইটেমের জন্য একটা প্রাসঙ্গিক ইমোজি বেছে দেয় — শুধুই
+// দেখতে সুন্দর ও সহজে চেনার জন্য, হিসাবে কোনো প্রভাব নেই
+const MARKET_EMOJI_MAP = [
+  [['আলু'],'🥔'],[['পিঁয়াজ','পেঁয়াজ'],'🧅'],[['রসুন'],'🧄'],[['আদা'],'🌱'],
+  [['চাল','চাউল'],'🍚'],[['ডাল'],'🫘'],[['আটা','ময়দা'],'🌾'],[['রুটি','পাউরুটি'],'🍞'],
+  [['তেল'],'🛢️'],[['ডিম'],'🥚'],[['দুধ'],'🥛'],[['দই'],'🍦'],
+  [['মাছ','ইলিশ','রুই','কাতলা','চিংড়ি'],'🐟'],[['মুরগি','মুরগী'],'🍗'],[['গরু','খাসি','মাংস'],'🥩'],
+  [['সবজি','শাক'],'🥬'],[['টমেটো'],'🍅'],[['মরিচ'],'🌶️'],[['লবণ'],'🧂'],
+  [['চিনি'],'🍬'],[['লেবু'],'🍋'],[['শসা'],'🥒'],[['গাজর'],'🥕'],[['বেগুন'],'🍆'],
+  [['কলা'],'🍌'],[['আপেল'],'🍎'],[['আম'],'🥭'],[['পেঁপে','পেপে'],'🍈'],
+  [['চা'],'🍵'],[['কফি'],'☕'],[['বিস্কুট'],'🍪'],[['পানি'],'💧'],
+  [['সাবান'],'🧼'],[['শ্যাম্পু'],'🧴'],[['মধু'],'🍯'],[['মসলা','গরম মসলা'],'🧂'],
+];
+function itemEmoji(name){
+  const n = (name||'').trim();
+  for(const [keys,emo] of MARKET_EMOJI_MAP){ if(keys.some(k=>n.includes(k))) return emo; }
+  return '🛒';
+}
+// এই বাংলা মাসে (চলতি মাসে) সম্পন্ন হওয়া বাজারগুলোতে মোট কত খরচ হয়েছে
+function marketMonthSpent(){
+  const ym = todayStr().slice(0,7);
+  return getCompletedMarketLists()
+    .filter(m=>(m['তারিখ_শেষ']||m['তারিখ_শুরু']||'').slice(0,7)===ym)
+    .reduce((s,m)=>s+(Number(m['মোট_খরচ'])||0),0);
+}
+// প্রোডাক্টের সাধারণ একক (মাপকাঠি) — নতুন আইটেম যোগ করার সময় বেছে নেওয়া যায়
+const MARKET_UNITS = ['কেজি','গ্রাম','লিটার','মিলি লিটার','পিস','পাতা','প্যাকেট','ডজন','বোতল','আঁটি/মুঠো','অন্যান্য'];
+function newMarketItemId(){ return 'it_' + Date.now() + '_' + Math.random().toString(36).slice(2,7); }
+function newMarketSplitId(){ return 's_' + Date.now() + '_' + Math.random().toString(36).slice(2,5); }
+
+// একটা "account" ধরনের স্প্লিট আসলে কতটুকু কভার করতে পারছে তা বের করে —
+// লেখা পরিমাণ যদি সেই অ্যাকাউন্টের ব্যালেন্সের চেয়ে বেশি হয়, তাহলে ব্যালেন্স পর্যন্তই গণনা হয়
+// (বাকিটা আসলে ওই মাধ্যম থেকে পরিশোধযোগ্য নয়)। "ধার" ধরনের স্প্লিটে কোনো ব্যালেন্স-সীমা নেই।
+function marketSplitCoveredAmount(sp){
+  const amt = Number(sp.amount)||0;
+  if(sp.type==='account'){
+    const bal = Math.max(getAccountBalance(sp.account),0);
+    return Math.min(amt, bal);
+  }
+  return amt;
+}
+// finalize প্যানেলে কোনো মাধ্যম বেছে নেওয়ার সময়, ইতিমধ্যে ব্যবহৃত হয়নি এমন একটা অ্যাকাউন্ট খুঁজে দেয়;
+// সব অ্যাকাউন্ট ব্যবহৃত হয়ে গেলে null রিটার্ন করে (তখন ধার-ভিত্তিক স্প্লিট যোগ করা হয়)
+function marketNextUnusedAccount(splits){
+  const used = new Set(splits.filter(s=>s.type==='account').map(s=>s.account));
+  return getAccountList().find(a=>!used.has(a)) || null;
+}
+// finalize প্যানেলের পরিশোধ-স্প্লিট তালিকা প্রতিটা পরিবর্তনের পর এই ফাংশন দিয়ে "সিঙ্ক" করা হয়:
+// ১) শেষের যেসব রো এখনো খালি/০ (ব্যবহার হয়নি) সেগুলো মুছে ফেলে — যাতে না লাগা অতিরিক্ত অপশন দেখা না যায়,
+// ২) বেছে নেওয়া মাধ্যম(গুলো) মিলিয়ে পুরো টাকাটা কভার না হলে (ব্যালেন্স কম থাকুক বা ইচ্ছাকৃতভাবে কম বসানো হোক)
+//    — তখনই স্বয়ংক্রিয়ভাবে আরেকটা নতুন (খালি) মাধ্যমের রো যোগ করে দেয়, যাতে ইউজারকে বাকি টাকাটা কোথা থেকে
+//    আসবে তা বেছে নিতে হয়।
+function syncMarketPaymentSplits(){
+  while(marketPaymentSplits.length>1){
+    const last = marketPaymentSplits[marketPaymentSplits.length-1];
+    if((Number(last.amount)||0) <= 0) marketPaymentSplits.pop();
+    else break;
+  }
+  const covered = marketPaymentSplits.reduce((s,sp)=>s+marketSplitCoveredAmount(sp), 0);
+  const remaining = +(marketFinalTotal - covered).toFixed(2);
+  const last = marketPaymentSplits[marketPaymentSplits.length-1];
+  const lastFilled = last && (Number(last.amount)||0) > 0;
+  if(remaining > 0.005 && (marketPaymentSplits.length===0 || lastFilled)){
+    const nextAcc = marketNextUnusedAccount(marketPaymentSplits);
+    if(nextAcc) marketPaymentSplits.push({ id:newMarketSplitId(), type:'account', account:nextAcc, person:'', amount:'' });
+    else marketPaymentSplits.push({ id:newMarketSplitId(), type:'ধার', person:'', amount:'' });
+  }
+}
+
+async function startNewMarketList(){
+  try{
+    const data = { 'তারিখ_শুরু': todayStr(), 'অবস্থা':'চলমান', 'আইটেম': [] };
+    const res = await apiPost('বাজার','add', null, data);
+    cache.market.push({ID: res.id, ...data});
+    marketAddFormOpen = true;
+    renderMarket();
+  }catch(e){ toast('তালিকা শুরু করা যায়নি'); }
+}
+async function updateMarketItems(listId, items){
+  await apiPost('বাজার','update', listId, {'আইটেম': items});
+  const list = cache.market.find(m=>m['ID']===listId);
+  if(list) list['আইটেম'] = items;
+}
+async function addMarketItem(listId, item){
+  const list = cache.market.find(m=>m['ID']===listId); if(!list) return;
+  await updateMarketItems(listId, [...(list['আইটেম']||[]), item]);
+}
+// আইটেম যোগ করার সময়ই দাম ও পরিমাণ লেখা হয়ে যায়, তাই চেকবক্সে চাপলে আর প্রম্পট
+// দেখানোর দরকার নেই — শুধু "কেনা" হয়েছে কিনা তা টগল হয়
+async function markMarketItemBought(listId, itemId, bought){
+  const list = cache.market.find(m=>m['ID']===listId); if(!list) return;
+  const items = (list['আইটেম']||[]).map(it=> it.id===itemId ? {...it, 'কেনা': bought} : it);
+  await updateMarketItems(listId, items);
+  renderMarket();
+}
+async function removeMarketItem(listId, itemId){
+  const list = cache.market.find(m=>m['ID']===listId); if(!list) return;
+  const items = (list['আইটেম']||[]).filter(it=>it.id!==itemId);
+  await updateMarketItems(listId, items);
+  renderMarket();
+}
+async function quickAddMarketItem(name, qty, price, total, unit){
+  let list = getActiveMarketList();
+  if(!list){
+    const data = { 'তারিখ_শুরু': todayStr(), 'অবস্থা':'চলমান', 'আইটেম': [] };
+    const res = await apiPost('বাজার','add', null, data);
+    list = {ID: res.id, ...data};
+    cache.market.push(list);
+  }
+  const qtyNum = Number(qty)||0;
+  // দাম আর মোট ইচ্ছাকৃতভাবে ০ রাখা হচ্ছে — বাজারের দাম দিনে দিনে বদলায়, তাই গতবারের দামটা
+  // এখানে সরাসরি "আসল" মান হিসেবে বসিয়ে দিলে ভুল করে পুরনো দামেই সম্পন্ন হয়ে যেতে পারে।
+  // এই সংখ্যাটা placeholder (হালকা ব্যাকগ্রাউন্ড হিন্ট) হিসেবেই দেখানো হবে renderMarket()-এ,
+  // ইউজারকে নিজেই আজকের আসল দাম টাইপ করে নিশ্চিত করতে হবে।
+  const item = { id:newMarketItemId(), 'নাম':name, 'পরিমাণ':qtyNum, 'দাম':0, 'মোট':0, 'একক': unit||'', 'কেনা':false };
+  marketExpandedItems.add(item.id);
+  await addMarketItem(list['ID'], item);
+  renderMarket();
+  toast(name + ' তালিকায় যোগ হয়েছে');
+}
+// splits: [{type:'account', account, amount}] বা [{type:'ধার', person, amount}] — একাধিক মাধ্যম মিলিয়ে পুরো
+// টাকাটা পরিশোধ করা যায়। 'account' ধরনের অংশ সংশ্লিষ্ট অ্যাকাউন্ট/ক্যাশ থেকে বিয়োগ হয়; 'ধার' ধরনের অংশ কারো
+// কাছ থেকে ধার নিয়ে সরাসরি পরিশোধ হিসেবে গণ্য হয় (কোনো অ্যাকাউন্ট থেকে টাকা যায় না, বরং সেই ব্যক্তির প্রতি দেনা বাড়ে)।
+async function finalizeMarketList(listId, finalTotal, splits){
+  const list = cache.market.find(m=>m['ID']===listId); if(!list) return;
+  const boughtCount = (list['আইটেম']||[]).filter(it=>it['কেনা']).length;
+  const accountSummary = splits.map(s=> s.type==='account' ? s.account : `ধার (${s.person})`).join(' + ');
+  const patch = { 'অবস্থা':'সম্পন্ন', 'তারিখ_শেষ': todayStr(), 'মোট_খরচ': finalTotal, 'অ্যাকাউন্ট': accountSummary, 'পরিশোধ_বিবরণ': splits };
+  await apiPost('বাজার','update', listId, patch);
+  Object.assign(list, patch);
+  for(const s of splits){
+    const isAccount = s.type==='account';
+    const now = new Date();
+    const nowTime = String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0')+':'+String(now.getSeconds()).padStart(2,'0');
+    const finData = {
+      'তারিখ': todayStr(), 'সময়': nowTime, 'ধরন':'খরচ', 'ক্যাটাগরি':'বাজার',
+      'অ্যাকাউন্ট': isAccount ? s.account : MARKET_DIRECT_BORROW_TAG,
+      'পরিমাণ': s.amount,
+      'নোট': isAccount ? `বাজার সম্পন্ন (${toBn(boughtCount)}টি আইটেম)` : `বাজার সম্পন্ন — ${s.person}-এর কাছ থেকে ধার নিয়ে সরাসরি পরিশোধ`,
+      'বাজার_আইডি': listId
+    };
+    const res = await apiPost('হিসাব','add', null, finData);
+    cache.finance.push({...finData, ID: res.id});
+    if(isAccount){
+      await applyAccountDelta(s.account, cashDeltaForFinance('খরচ', s.amount));
+    } else {
+      const ledgerData = {
+        'নাম': s.person, 'ধরন':'পাওনাদার', 'লেনদেন':'বৃদ্ধি', 'পরিমাণ': s.amount,
+        'তারিখ': todayStr(), 'সময়': nowTime,
+        'অ্যাকাউন্ট': MARKET_DIRECT_BORROW_TAG,
+        'নোট': 'বাজার — সরাসরি পরিশোধে ধার নেওয়া হয়েছে',
+        'বাজার_আইডি': listId
+      };
+      const lres = await apiPost('লেনদেন','add', null, ledgerData);
+      cache.ledger.push({...ledgerData, ID: lres.id});
+    }
+  }
+}
+function showMarketHistoryDetail(id){
+  const m = cache.market.find(x=>x['ID']===id); if(!m) return;
+  const items = m['আইটেম']||[];
+  const rowsHtml = items.length ? items.map(it=>`
+    <div class="ledger-row">
+      <div>
+        <div>${it['নাম']}</div>
+        <div class="ledger-meta">${it['পরিমাণ']||''}</div>
+      </div>
+      <span class="amt expense">৳${fmtAmt(itemTotalPrice(it))}</span>
+    </div>`).join('') : '<div class="empty">কোনো আইটেম নেই</div>';
+  const totalHtml = `<div class="ledger-row" style="border-top:1px solid var(--rule);margin-top:4px;padding-top:10px;"><b>মোট</b><span class="amt expense"><b>৳${fmtAmt(Number(m['মোট_খরচ'])||0)}</b></span></div>`;
+  const splits = m['পরিশোধ_বিবরণ'];
+  const paymentHtml = (Array.isArray(splits) && splits.length) ? `
+    <div class="ledger-meta" style="margin:8px 0 4px;">পরিশোধ যেভাবে হয়েছে</div>
+    ${splits.map(s=>`
+    <div class="ledger-row" style="padding:4px 0;">
+      <span>${s.type==='account' ? '🏦 '+s.account : '🤝 ধার — '+s.person}</span>
+      <span class="amt expense">৳${fmtAmt(Number(s.amount)||0)}</span>
+    </div>`).join('')}` : '';
+  document.getElementById('detailsTitle').textContent = 'বাজার — ' + fmtDMY(m['তারিখ_শেষ']||m['তারিখ_শুরু']);
+  document.getElementById('detailsBody').innerHTML = rowsHtml + totalHtml + paymentHtml;
+  document.getElementById('detailsModal').classList.add('show');
+}
+
+function renderMarket(){
+  const activeList = getActiveMarketList();
+  const completedLists = getCompletedMarketLists();
+  const itemStats = marketItemStats();
+  const frequentItems = Object.entries(itemStats).sort((a,b)=>b[1].count-a[1].count).slice(0,12);
+  const nameOptions = Object.keys(itemStats);
+  const monthSpent = marketMonthSpent();
+
+  let activeCardHtml;
+  if(!activeList){
+    activeCardHtml = `
+    <div class="card">
+      <h2>🛒 বাজারের তালিকা</h2>
+      <p style="font-size:13px;color:var(--muted);margin:0 0 10px;">এখন কোনো চলমান বাজারের তালিকা নেই। নতুন তালিকা শুরু করে আইটেম যোগ করুন।</p>
+      <button class="btn full" id="startMarketListBtn">+ নতুন তালিকা শুরু করুন</button>
+    </div>`;
+  } else {
+    const t = marketListTotals(activeList);
+    const marketPersonNames = [...new Set(cache.ledger.map(r=>(r['নাম']||'').trim()).filter(Boolean))].sort();
+    const items = [...(activeList['আইটেম']||[])];
+    const pct = t.itemCount ? Math.round((t.boughtCount/t.itemCount)*100) : 0;
+    activeCardHtml = `
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <span class="ledger-meta">🛒 ${fmtDMY(activeList['তারিখ_শুরু'])} থেকে</span>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;">সর্বমোট: ৳${fmtAmt(t.estTotal)}</span>
+      </div>
+      ${t.itemCount ? `
+      <div class="market-progress-wrap">
+        <div class="market-progress-track"><div class="market-progress-fill" style="width:${pct}%;"></div></div>
+        <div class="market-progress-lbl"><span>${toBn(t.boughtCount)}/${toBn(t.itemCount)}টি কেনা হয়েছে</span><span>৳${fmtAmt(t.boughtTotal)} খরচ হয়েছে</span></div>
+      </div>` : ''}
+      <div style="margin-top:10px;">
+        ${items.length? items.map(it=>{
+          const name = (it['নাম']||'').trim();
+          const stat = itemStats[name];
+          const pricePH = (!it['দাম'] && stat && stat.price) ? `${fmtAmt(stat.price)}` : 'দাম';
+          const priceTitle = (stat && stat.price) ? `গতবারের দাম: ৳${fmtAmt(stat.price)}` : '';
+          const totalPH = (!itemTotalPrice(it) && stat && stat.total) ? `${fmtAmt(stat.total)}` : 'মোট';
+          const totalTitle = (stat && stat.total) ? `গতবারের মোট: ৳${fmtAmt(stat.total)}` : '';
+          let trendHtml = '';
+          if(it['দাম'] && stat && stat.price>0 && Number(it['দাম'])!==stat.price){
+            const diff = Number(it['দাম']) - stat.price;
+            const pctDiff = Math.round(Math.abs(diff)/stat.price*100);
+            trendHtml = diff>0
+              ? `<span class="market-trend up" title="গতবার ৳${fmtAmt(stat.price)} ছিল">▲৳${fmtAmt(Math.abs(diff))}</span>`
+              : `<span class="market-trend down" title="গতবার ৳${fmtAmt(stat.price)} ছিল">▼৳${fmtAmt(Math.abs(diff))}</span>`;
+          }
+          const expanded = marketExpandedItems.has(it.id);
+          return `
+          <div class="market-item-row">
+            <div class="market-item-top">
+              <input type="checkbox" class="market-item-check" data-item="${it.id}" ${it['কেনা']?'checked':''} style="flex:0 0 auto;">
+              <span class="market-item-emoji">${itemEmoji(name)}</span>
+              <span class="market-item-name market-item-toggle${it['কেনা']?' bought':''}" data-item="${it.id}">${it['নাম']} <span class="market-item-caret">${expanded?'▾':'▸'}</span></span>
+              ${trendHtml}
+              <button class="btn ghost small market-item-del" data-item="${it.id}" style="flex:0 0 auto;">✕</button>
+            </div>
+            <div class="market-item-grid${expanded?'':' collapsed'}">
+              <input type="number" step="0.01" min="0" class="market-item-price-input" data-item="${it.id}" value="${it['দাম']?it['দাম']:''}" placeholder="${pricePH}" title="${priceTitle}">
+              <input type="number" step="any" min="0" class="market-item-qty-input" data-item="${it.id}" value="${it['পরিমাণ']?it['পরিমাণ']:''}" placeholder="পরিমাণ">
+              <select class="market-item-unit-input" data-item="${it.id}">
+                <option value=""></option>
+                ${MARKET_UNITS.map(u=>`<option value="${u}" ${it['একক']===u?'selected':''}>${u}</option>`).join('')}
+              </select>
+              <input type="number" step="0.01" min="0" class="market-item-total-input" data-item="${it.id}" value="${itemTotalPrice(it)||''}" placeholder="${totalPH}" title="${totalTitle}">
+            </div>
+          </div>`;
+        }).join('') : '<div class="empty">এখনো কোনো আইটেম যোগ হয়নি</div>'}
+      </div>
+      ${marketAddFormOpen ? `
+      <form id="marketAddForm" style="margin-top:12px;border-top:1px dashed var(--rule);padding-top:12px;">
+        <label>আইটেমের নাম</label>
+        <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">
+          <div style="flex:2;min-width:0;">
+            <input type="text" name="নাম" id="marketItemNameInput" list="marketItemNameList" placeholder="যেমন: বিস্কুট" autocomplete="off" required>
+            <datalist id="marketItemNameList">${nameOptions.map(n=>`<option value="${n}">`).join('')}</datalist>
+          </div>
+          <div style="flex:1;min-width:70px;">
+            <input type="number" step="any" min="0" name="পরিমাণ" id="marketItemQtyInput" placeholder="পরিমাণ">
+          </div>
+          <div style="flex:1;min-width:90px;">
+            <select name="একক" id="marketItemUnitSelect">
+              <option value="">একক বেছে নিন</option>
+              ${MARKET_UNITS.map(u=>`<option value="${u}">${u}</option>`).join('')}
+            </select>
+          </div>
+          <button class="btn small" type="submit" style="margin-top:0;white-space:nowrap;">+ যোগ করুন</button>
+        </div>
+        <div id="marketPriceHint" class="ledger-meta" style="margin-top:4px;"></div>
+      </form>
+      <div style="display:flex;gap:8px;margin-top:12px;">
+        <button class="btn gold small full" id="marketFinalizeToggleBtn">✅ বাজার সম্পন্ন করুন</button>
+      </div>
+      ` : `
+      <div style="display:flex;gap:8px;margin-top:12px;">
+        <button class="btn small" id="marketShowAddFormBtn" style="flex:1;">+ যোগ করুন</button>
+        <button class="btn gold small" id="marketFinalizeToggleBtn" style="flex:1;">✅ বাজার সম্পন্ন করুন</button>
+      </div>
+      `}
+      ${marketFinalizeOpen ? (()=>{
+        const covered = marketPaymentSplits.reduce((s,sp)=>s+marketSplitCoveredAmount(sp), 0);
+        const remaining = +(marketFinalTotal - covered).toFixed(2);
+        const remainingHtml = Math.abs(remaining) < 0.005
+          ? `<span style="color:var(--sage);">সম্পূর্ণ পরিশোধের ব্যবস্থা হয়েছে ✓</span>`
+          : remaining > 0
+            ? `<span style="color:var(--clay);">বাকি আছে: ৳${fmtAmt(remaining)}</span>`
+            : `<span style="color:var(--clay);">মোটের চেয়ে ৳${fmtAmt(-remaining)} বেশি ধরা হয়েছে</span>`;
+        return `
+      <div style="margin-top:12px;border-top:1px dashed var(--rule);padding-top:12px;">
+        <label>চূড়ান্ত মোট খরচ (৳)</label>
+        <input type="number" step="0.01" min="0" id="marketFinalTotalInput" value="${fmtAmt(marketFinalTotal)}">
+        <label style="margin-top:10px;">কীভাবে পরিশোধ করবেন</label>
+        <p style="font-size:12px;color:var(--muted);margin:0 0 8px;">একটা অ্যাকাউন্ট থেকে পুরোটা, অথবা একাধিক অ্যাকাউন্ট/ধার মিলিয়ে ভাগ করে পরিশোধ করতে পারেন।</p>
+        ${marketPaymentSplits.map((sp,i)=>`
+        <div class="market-split-row" style="border:1px solid var(--rule);border-radius:8px;padding:8px;margin-bottom:8px;">
+          <div style="display:flex;gap:8px;align-items:center;">
+            <select class="market-split-type" data-idx="${i}" style="flex:1;margin:0;">
+              <option value="account" ${sp.type==='account'?'selected':''}>🏦 অ্যাকাউন্ট থেকে পরিশোধ</option>
+              <option value="ধার" ${sp.type==='ধার'?'selected':''}>🤝 ধার নিয়ে সরাসরি পরিশোধ</option>
+            </select>
+            ${marketPaymentSplits.length>1 ? `<button type="button" class="btn ghost danger small market-split-remove" data-idx="${i}" style="margin:0;padding:6px 10px;">✕</button>` : ''}
+          </div>
+          ${sp.type==='account' ? `
+          <select class="market-split-account" data-idx="${i}" style="margin-top:6px;">${getAccountList().map(a=>`<option value="${a}" ${sp.account===a?'selected':''}>${a}</option>`).join('')}</select>
+          <div class="ledger-meta" style="margin:4px 0;">এই অ্যাকাউন্টে আছে: ৳${fmtAmt(getAccountBalance(sp.account))} <button type="button" class="btn ghost small market-split-use-balance" data-idx="${i}" style="margin:0 0 0 6px;padding:2px 8px;">সম্পূর্ণ ব্যালেন্স</button></div>
+          ` : `
+          <input type="text" class="market-split-person" data-idx="${i}" list="marketPersonNameList" placeholder="কার কাছ থেকে ধার নিলেন?" value="${sp.person||''}" autocomplete="off" style="margin-top:6px;">
+          `}
+          <input type="number" step="0.01" min="0" class="market-split-amount" data-idx="${i}" value="${sp.amount||''}" placeholder="পরিমাণ (৳)" style="margin-top:6px;">
+        </div>`).join('')}
+        <datalist id="marketPersonNameList">${marketPersonNames.map(n=>`<option value="${n}">`).join('')}</datalist>
+        <div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;margin:4px 0 10px;">
+          ${remainingHtml}
+          <button type="button" class="btn ghost small" id="marketAddSplitBtn" style="margin:0;">+ আরেকটি মাধ্যম</button>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn small" id="marketConfirmFinalizeBtn" style="flex:1;">নিশ্চিত করে সম্পন্ন করুন</button>
+          <button class="btn ghost small" id="marketCancelFinalizeBtn">বাতিল</button>
+        </div>
+      </div>`;
+      })() : ''}
+    </div>`;
+  }
+
+  const quickAddHtml = frequentItems.length ? `
+    <div class="card">
+      <h2>⭐ ঘন ঘন কেনা আইটেম</h2>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;">
+        ${frequentItems.map(([name,v])=>`
+        <button class="market-chip market-quick-add" data-name="${name}" data-qty="${v.qty||''}" data-price="${v.price||0}" data-total="${v.total||''}" data-unit="${v.unit||''}">
+          <span class="mc-name">${itemEmoji(name)} ${name}</span>
+          ${v.total? `<span class="mc-price">গতবার ৳${fmtAmt(v.total)}</span>` : ''}
+        </button>`).join('')}
+      </div>
+    </div>` : '';
+
+  const historyHtml = `
+    <div class="card">
+      <h2>📜 বাজারের ইতিহাস</h2>
+      ${monthSpent>0 ? `<div class="market-stat-bar"><div class="summary-chip"><div class="lbl">এই মাসে বাজারে খরচ</div><div class="val" style="color:var(--clay);">৳${fmtAmt(monthSpent)}</div></div></div>` : ''}
+      ${completedLists.length ? completedLists.slice(0,20).map((m,idx)=>{
+        const items = m['আইটেম']||[];
+        const total = Number(m['মোট_খরচ'])||0;
+        const older = completedLists[idx+1];
+        let trendHtml = '';
+        if(older){
+          const olderTotal = Number(older['মোট_খরচ'])||0;
+          if(olderTotal>0 && total!==olderTotal){
+            const diff = total - olderTotal;
+            trendHtml = diff>0
+              ? `<span class="mh-trend" style="color:var(--clay);">▲৳${fmtAmt(Math.abs(diff))}</span>`
+              : `<span class="mh-trend" style="color:var(--sage);">▼৳${fmtAmt(Math.abs(diff))}</span>`;
+          }
+        }
+        const emojiStrip = items.slice(0,6).map(it=>itemEmoji(it['নাম'])).join('');
+        return `
+        <div class="ledger-row market-history-row" data-id="${m['ID']}" style="cursor:pointer;">
+          <div>
+            <div>${fmtDMY(m['তারিখ_শেষ']||m['তারিখ_শুরু'])} ${trendHtml}</div>
+            <div class="ledger-meta">${toBn(items.length)}টি আইটেম <span class="mh-emoji-strip">${emojiStrip}</span></div>
+          </div>
+          <span class="amt expense">৳${fmtAmt(total)}</span>
+        </div>`;
+      }).join('') : '<div class="empty">এখনো কোনো সম্পন্ন বাজার নেই</div>'}
+    </div>`;
+
+  main.innerHTML = activeCardHtml + quickAddHtml + historyHtml;
+
+  const startBtn = document.getElementById('startMarketListBtn');
+  if(startBtn) startBtn.addEventListener('click', startNewMarketList);
+
+  if(activeList){
+    document.querySelectorAll('.market-item-check').forEach(el=>el.addEventListener('change', async ()=>{
+      await markMarketItemBought(activeList['ID'], el.dataset.item, el.checked);
+    }));
+    document.querySelectorAll('.market-item-del').forEach(el=>el.addEventListener('click', ()=>{
+      if(!confirm('এই আইটেমটি মুছে ফেলতে চান?')) return;
+      removeMarketItem(activeList['ID'], el.dataset.item);
+    }));
+    document.querySelectorAll('.market-item-toggle').forEach(el=>el.addEventListener('click', ()=>{
+      const id = el.dataset.item;
+      if(marketExpandedItems.has(id)) marketExpandedItems.delete(id); else marketExpandedItems.add(id);
+      renderMarket();
+    }));
+
+    // প্রতিটা আইটেম রো-তে দাম/পরিমাণ/মোট — যেকোনো দুইটা লিখলে তৃতীয়টা বুঝে হিসাব হয়ে যায়:
+    // দাম+পরিমাণ দিলে → মোট = দাম×পরিমাণ; শুধু দাম দিলে (পরিমাণ ফাঁকা) → মোট = দাম;
+    // পরিমাণ+মোট দিলে (সরাসরি মোট লিখলে) → দাম = মোট÷পরিমাণ (প্রতি এককের দাম বের হয়ে যায়)
+    function recalcRow(itemId, changedField){
+      const priceEl = document.querySelector(`.market-item-price-input[data-item="${itemId}"]`);
+      const qtyEl = document.querySelector(`.market-item-qty-input[data-item="${itemId}"]`);
+      const totalEl = document.querySelector(`.market-item-total-input[data-item="${itemId}"]`);
+      const price = priceEl.value===''?null:Number(priceEl.value);
+      const qty = qtyEl.value===''?null:Number(qtyEl.value);
+      const total = totalEl.value===''?null:Number(totalEl.value);
+      if(changedField==='price' || changedField==='qty'){
+        if(price!=null){
+          totalEl.value = qty? +(price*qty).toFixed(2) : +price.toFixed(2);
+        }
+      } else if(changedField==='total'){
+        if(total!=null){
+          if(qty) priceEl.value = +(total/qty).toFixed(2);
+          else priceEl.value = +total.toFixed(2);
+        }
+      }
+    }
+    function saveRow(itemId){
+      const priceEl = document.querySelector(`.market-item-price-input[data-item="${itemId}"]`);
+      const qtyEl = document.querySelector(`.market-item-qty-input[data-item="${itemId}"]`);
+      const totalEl = document.querySelector(`.market-item-total-input[data-item="${itemId}"]`);
+      const unitEl = document.querySelector(`.market-item-unit-input[data-item="${itemId}"]`);
+      const p = Number(priceEl.value)||0, q = Number(qtyEl.value)||0, t = Number(totalEl.value)||0;
+      const items = (activeList['আইটেম']||[]).map(it=> it.id===itemId ? {...it, 'দাম':p, 'পরিমাণ':q, 'মোট':t, 'একক': unitEl.value} : it);
+      return updateMarketItems(activeList['ID'], items);
+    }
+    document.querySelectorAll('.market-item-price-input').forEach(el=>{
+      el.addEventListener('input', ()=>recalcRow(el.dataset.item, 'price'));
+      el.addEventListener('change', async ()=>{ await saveRow(el.dataset.item); renderMarket(); });
+    });
+    document.querySelectorAll('.market-item-qty-input').forEach(el=>{
+      el.addEventListener('input', ()=>recalcRow(el.dataset.item, 'qty'));
+      el.addEventListener('change', async ()=>{ await saveRow(el.dataset.item); renderMarket(); });
+    });
+    document.querySelectorAll('.market-item-total-input').forEach(el=>{
+      el.addEventListener('input', ()=>recalcRow(el.dataset.item, 'total'));
+      el.addEventListener('change', async ()=>{ await saveRow(el.dataset.item); renderMarket(); });
+    });
+    document.querySelectorAll('.market-item-unit-input').forEach(el=>{
+      el.addEventListener('change', async ()=>{ await saveRow(el.dataset.item); renderMarket(); });
+    });
+
+    const showAddFormBtn = document.getElementById('marketShowAddFormBtn');
+    if(showAddFormBtn){
+      showAddFormBtn.addEventListener('click', ()=>{
+        marketAddFormOpen = true;
+        renderMarket();
+        const el = document.getElementById('marketItemNameInput');
+        if(el) el.focus();
+      });
+    }
+    const marketAddFormEl = document.getElementById('marketAddForm');
+    if(marketAddFormEl){
+      const nameInput = document.getElementById('marketItemNameInput');
+      const priceHint = document.getElementById('marketPriceHint');
+      const unitSelect = document.getElementById('marketItemUnitSelect');
+      nameInput.addEventListener('input', ()=>{
+        const stat = itemStats[nameInput.value.trim()];
+        priceHint.textContent = stat && stat.total ? `গতবার: ${stat.qty||''} ${stat.unit||''} — ৳${fmtAmt(stat.total)}` : '';
+        // এই প্রোডাক্টের একক আগে বেছে নেওয়া থাকলে সেটাই অটো বসে যায় — আবার বেছে নিতে হয় না
+        if(stat && stat.unit) unitSelect.value = stat.unit;
+      });
+      marketAddFormEl.addEventListener('submit', async e=>{
+        e.preventDefault();
+        const fd = new FormData(e.target);
+        const name = (fd.get('নাম')||'').trim();
+        if(!name) return;
+        const unit = (fd.get('একক')||'').trim();
+        const qtyNum = Number(fd.get('পরিমাণ'))||0;
+        const item = { id:newMarketItemId(), 'নাম':name, 'পরিমাণ':qtyNum, 'দাম':0, 'মোট':0, 'একক':unit, 'কেনা':false };
+        marketExpandedItems.add(item.id);
+        try{
+          await addMarketItem(activeList['ID'], item);
+          marketAddFormOpen = true;
+          renderMarket();
+          toast('তালিকায় যোগ হয়েছে');
+          const el = document.getElementById('marketItemNameInput');
+          if(el) el.focus();
+        }catch(err){ toast('যোগ করা যায়নি'); }
+      });
+    }
+
+    document.getElementById('marketFinalizeToggleBtn').addEventListener('click', ()=>{
+      const tt = marketListTotals(activeList);
+      marketFinalizeOpen = true;
+      marketFinalTotal = tt.boughtTotal;
+      marketPaymentSplits = [{ id:'s0', type:'account', account:getAccountList()[0], person:'', amount: tt.boughtTotal }];
+      syncMarketPaymentSplits();
+      renderMarket();
+    });
+
+    if(marketFinalizeOpen){
+      document.getElementById('marketCancelFinalizeBtn').addEventListener('click', ()=>{ marketFinalizeOpen = false; marketPaymentSplits = []; renderMarket(); });
+
+      document.getElementById('marketFinalTotalInput').addEventListener('change', e=>{
+        marketFinalTotal = Number(e.target.value)||0;
+        if(marketPaymentSplits.length===1) marketPaymentSplits[0].amount = marketFinalTotal;
+        syncMarketPaymentSplits();
+        renderMarket();
+      });
+
+      document.querySelectorAll('.market-split-type').forEach(el=>el.addEventListener('change', ()=>{
+        const idx = Number(el.dataset.idx);
+        const sp = marketPaymentSplits[idx]; if(!sp) return;
+        sp.type = el.value;
+        if(sp.type==='account'){ sp.account = marketNextUnusedAccount(marketPaymentSplits)||getAccountList()[0]; delete sp.person; }
+        else { sp.person = sp.person||''; delete sp.account; }
+        syncMarketPaymentSplits();
+        renderMarket();
+      }));
+      document.querySelectorAll('.market-split-account').forEach(el=>el.addEventListener('change', ()=>{
+        const idx = Number(el.dataset.idx);
+        const sp = marketPaymentSplits[idx]; if(!sp) return;
+        sp.account = el.value;
+        syncMarketPaymentSplits();
+        renderMarket();
+      }));
+      document.querySelectorAll('.market-split-use-balance').forEach(el=>el.addEventListener('click', ()=>{
+        const idx = Number(el.dataset.idx);
+        const sp = marketPaymentSplits[idx]; if(!sp) return;
+        const bal = getAccountBalance(sp.account);
+        if(bal<=0){ toast('এই অ্যাকাউন্টে কোনো ব্যালেন্স নেই'); return; }
+        sp.amount = +bal.toFixed(2);
+        syncMarketPaymentSplits();
+        renderMarket();
+      }));
+      document.querySelectorAll('.market-split-person').forEach(el=>{
+        el.addEventListener('input', ()=>{ const sp = marketPaymentSplits[Number(el.dataset.idx)]; if(sp) sp.person = el.value; });
+        el.addEventListener('change', ()=>{ syncMarketPaymentSplits(); renderMarket(); });
+      });
+      document.querySelectorAll('.market-split-amount').forEach(el=>{
+        el.addEventListener('input', ()=>{ const sp = marketPaymentSplits[Number(el.dataset.idx)]; if(sp) sp.amount = el.value===''?'':Number(el.value); });
+        el.addEventListener('change', ()=>{ syncMarketPaymentSplits(); renderMarket(); });
+      });
+      document.querySelectorAll('.market-split-remove').forEach(el=>el.addEventListener('click', ()=>{
+        const idx = Number(el.dataset.idx);
+        marketPaymentSplits.splice(idx,1);
+        if(!marketPaymentSplits.length) marketPaymentSplits.push({ id:newMarketSplitId(), type:'account', account:getAccountList()[0], person:'', amount:'' });
+        syncMarketPaymentSplits();
+        renderMarket();
+      }));
+      const addSplitBtn = document.getElementById('marketAddSplitBtn');
+      if(addSplitBtn) addSplitBtn.addEventListener('click', ()=>{
+        const covered = marketPaymentSplits.reduce((s,sp)=>s+marketSplitCoveredAmount(sp), 0);
+        const remaining = Math.max(0, +(marketFinalTotal-covered).toFixed(2));
+        const nextAcc = marketNextUnusedAccount(marketPaymentSplits);
+        if(nextAcc) marketPaymentSplits.push({ id:newMarketSplitId(), type:'account', account:nextAcc, person:'', amount: remaining||'' });
+        else marketPaymentSplits.push({ id:newMarketSplitId(), type:'ধার', person:'', amount: remaining||'' });
+        renderMarket();
+      });
+
+      document.getElementById('marketConfirmFinalizeBtn').addEventListener('click', async ()=>{
+        const totalVal = Number(document.getElementById('marketFinalTotalInput').value);
+        if(isNaN(totalVal) || totalVal<0){ toast('সঠিক পরিমাণ লিখুন'); return; }
+        const splits = marketPaymentSplits.map(sp=>({...sp, amount:Number(sp.amount)||0}));
+        if(!splits.length || splits.some(sp=>sp.amount<=0)){ toast('প্রতিটি মাধ্যমে সঠিক পরিমাণ দিন'); return; }
+        if(splits.some(sp=>sp.type==='ধার' && !(sp.person||'').trim())){ toast('ধার নেওয়া মাধ্যমে কার কাছ থেকে নিয়েছেন তা লিখুন'); return; }
+        const assigned = +splits.reduce((s,sp)=>s+sp.amount,0).toFixed(2);
+        if(Math.abs(assigned-totalVal) > 0.01){
+          toast(assigned<totalVal ? `আরও ৳${fmtAmt(totalVal-assigned)} কোন মাধ্যম থেকে পরিশোধ হবে তা যোগ করুন` : `মোটের চেয়ে ৳${fmtAmt(assigned-totalVal)} বেশি ধরা হয়েছে`);
+          return;
+        }
+        const desc = splits.map(sp=> sp.type==='account' ? `"${sp.account}" থেকে ৳${fmtAmt(sp.amount)}` : `${sp.person}-এর কাছ থেকে ধার নিয়ে ৳${fmtAmt(sp.amount)}`).join(', ');
+        if(!confirm(`${desc} — এভাবে পরিশোধ করে বাজার সম্পন্ন করবেন?`)) return;
+        try{
+          await finalizeMarketList(activeList['ID'], totalVal, splits);
+          marketFinalizeOpen = false;
+          marketPaymentSplits = [];
+          marketAddFormOpen = false;
+          renderMarket();
+          toast('বাজার সম্পন্ন হয়েছে');
+        }catch(err){ toast('সম্পন্ন করা যায়নি: ' + err.message); }
+      });
+    }
+  }
+
+  document.querySelectorAll('.market-quick-add').forEach(btn=>btn.addEventListener('click', ()=>{
+    openMarketQuickAddModal(btn.dataset.name, btn.dataset.qty, Number(btn.dataset.price)||0, btn.dataset.total, btn.dataset.unit);
+  }));
+  document.querySelectorAll('.market-history-row').forEach(row=>row.addEventListener('click', ()=>showMarketHistoryDetail(row.dataset.id)));
 }
 
 /* ---------------- PRAYER: helpers ---------------- */
@@ -3009,6 +3698,40 @@ document.getElementById('adaSaveBtn').addEventListener('click', async ()=>{
   try{ await setQazaTotal(newTotal); document.getElementById('adaModal').classList.remove('show'); document.getElementById('adaInput').value=''; renderPrayer(); toast('হালনাগাদ হয়েছে'); }
   catch(e){ toast('সংরক্ষণ করা যায়নি'); }
 });
+
+/* ---- market quick-add quantity modal ---- */
+let pendingQuickAddItem = null; // ঘন ঘন কেনা আইটেম চিপে চাপার পর কোন আইটেমের জন্য পরিমাণ জিজ্ঞেস করা হচ্ছে তা মনে রাখে
+(function(){
+  const unitSelect = document.getElementById('marketQuickAddUnitSelect');
+  MARKET_UNITS.forEach(u=>{
+    const opt = document.createElement('option');
+    opt.value = u; opt.textContent = u;
+    unitSelect.appendChild(opt);
+  });
+})();
+function openMarketQuickAddModal(name, qty, price, total, unit){
+  pendingQuickAddItem = {name, price, total};
+  document.getElementById('marketQuickAddTitle').textContent = itemEmoji(name) + ' ' + name;
+  document.getElementById('marketQuickAddHint').textContent = total ? `গতবার: ${qty||''} ${unit||''} — ৳${fmtAmt(total)}` : '';
+  document.getElementById('marketQuickAddQtyInput').value = qty || '';
+  document.getElementById('marketQuickAddUnitSelect').value = unit || '';
+  document.getElementById('marketQuickAddModal').classList.add('show');
+  document.getElementById('marketQuickAddQtyInput').focus();
+}
+document.getElementById('marketQuickAddCloseBtn').addEventListener('click', ()=>{
+  document.getElementById('marketQuickAddModal').classList.remove('show');
+  pendingQuickAddItem = null;
+});
+document.getElementById('marketQuickAddConfirmBtn').addEventListener('click', async ()=>{
+  if(!pendingQuickAddItem) return;
+  const qty = document.getElementById('marketQuickAddQtyInput').value;
+  const unit = document.getElementById('marketQuickAddUnitSelect').value;
+  const {name, price, total} = pendingQuickAddItem;
+  document.getElementById('marketQuickAddModal').classList.remove('show');
+  pendingQuickAddItem = null;
+  await quickAddMarketItem(name, qty, price, total, unit);
+});
+
 
 /* ---- rakat checklist modal ---- */
 function openRakatModal(name, dateStr){
