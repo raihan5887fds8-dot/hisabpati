@@ -159,6 +159,7 @@
   .amt{font-family:'JetBrains Mono',monospace;font-weight:600;}
   .amt.income{color:var(--sage);}
   .amt.expense{color:var(--clay);}
+  .amt.receive{color:var(--gold);}
   .summary-bar{display:flex;gap:10px;margin-bottom:14px;}
   .summary-chip{flex:1;text-align:center;padding:10px 6px;border-radius:6px;background:#fff;border:1px solid var(--rule);}
   .summary-chip .lbl{font-size:11px;color:var(--muted);}
@@ -335,7 +336,9 @@
 
   .modal{position:fixed;inset:0;background:rgba(15,46,36,.55);display:none;align-items:center;justify-content:center;z-index:200;padding:16px;}
   .modal.show{display:flex;}
-  .modal-box{background:var(--parchment-card);border-radius:10px;padding:20px;width:100%;max-width:400px;max-height:85vh;overflow-y:auto;}
+  .modal-box{background:var(--parchment-card);border-radius:10px;padding:20px;width:100%;max-width:400px;max-height:85vh;overflow-y:auto;position:relative;}
+  .modal-x-close{position:absolute;top:8px;right:8px;width:28px;height:28px;border-radius:50%;border:none;background:rgba(15,46,36,.08);color:var(--ink);font-size:15px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:5;padding:0;}
+  .modal-x-close:hover{background:rgba(15,46,36,.18);}
   .modal-box h3{font-family:'Tiro Bangla',serif;color:var(--ink);margin:0 0 14px;font-size:19px;text-align:center;}
   .rakat-row{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px dashed var(--rule);font-size:14px;}
   .rakat-row:last-child{border-bottom:none;}
@@ -378,7 +381,7 @@
 
 <!-- header note modal -->
 <div class="modal" id="noteModal">
-  <div class="modal-box">
+  <div class="modal-box"><button type="button" class="modal-x-close" aria-label="বন্ধ করুন" onclick="this.closest('.modal').querySelector('[id$=CloseBtn],[data-close-modal],[id$=CancelBtn]')?.click()">✕</button>
     <h3 id="noteModalTitle">নোট যোগ করুন</h3>
     <label>নোট লিখুন</label>
     <textarea id="noteTextInput" rows="4" placeholder="যেমন: বাজার থেকে চাল আনতে হবে"></textarea>
@@ -392,7 +395,7 @@
 
 <!-- qaza calculator modal -->
 <div class="modal" id="qazaModal">
-  <div class="modal-box">
+  <div class="modal-box"><button type="button" class="modal-x-close" aria-label="বন্ধ করুন" onclick="this.closest('.modal').querySelector('[id$=CloseBtn],[data-close-modal],[id$=CancelBtn]')?.click()">✕</button>
     <h3>কাজা নামাজ হিসাব</h3>
     <div id="qazaStep1">
       <label>আপনার জন্ম তারিখ</label>
@@ -418,7 +421,7 @@
 
 <!-- ada (offset) modal -->
 <div class="modal" id="adaModal">
-  <div class="modal-box">
+  <div class="modal-box"><button type="button" class="modal-x-close" aria-label="বন্ধ করুন" onclick="this.closest('.modal').querySelector('[id$=CloseBtn],[data-close-modal],[id$=CancelBtn]')?.click()">✕</button>
     <h3>কাজা আদায়</h3>
     <label>কত রাকাত আদায় করলেন?</label>
     <input type="number" id="adaInput" min="1">
@@ -429,7 +432,7 @@
 
 <!-- rakat checklist modal -->
 <div class="modal" id="rakatModal">
-  <div class="modal-box">
+  <div class="modal-box"><button type="button" class="modal-x-close" aria-label="বন্ধ করুন" onclick="this.closest('.modal').querySelector('[id$=CloseBtn],[data-close-modal],[id$=CancelBtn]')?.click()">✕</button>
     <h3 id="rakatModalTitle">নামাজ</h3>
     <div id="rakatModalBody"></div>
     <button class="btn full" id="rakatSaveBtn" style="margin-top:12px;">সংরক্ষণ করুন</button>
@@ -439,7 +442,7 @@
 
 <!-- generic details modal -->
 <div class="modal" id="detailsModal">
-  <div class="modal-box">
+  <div class="modal-box"><button type="button" class="modal-x-close" aria-label="বন্ধ করুন" onclick="this.closest('.modal').querySelector('[id$=CloseBtn],[data-close-modal],[id$=CancelBtn]')?.click()">✕</button>
     <h3 id="detailsTitle">বিস্তারিত</h3>
     <div id="detailsBody" style="font-size:14px;line-height:1.9;"></div>
     <button class="btn ghost full" id="detailsCloseBtn" style="margin-top:14px;">বন্ধ করুন</button>
@@ -448,7 +451,7 @@
 
 <!-- add routine task modal -->
 <div class="modal" id="addRoutineModal">
-  <div class="modal-box">
+  <div class="modal-box"><button type="button" class="modal-x-close" aria-label="বন্ধ করুন" onclick="this.closest('.modal').querySelector('[id$=CloseBtn],[data-close-modal],[id$=CancelBtn]')?.click()">✕</button>
     <h3>নতুন কাজ যোগ করুন</h3>
     <div style="display:flex;gap:8px;margin-bottom:12px;">
       <button type="button" class="btn small rt-type-btn active" data-type="সাপ্তাহিক">সাপ্তাহিক (প্রতি সপ্তাহে)</button>
@@ -466,7 +469,16 @@
         <input type="date" name="তারিখ">
       </div>
       <label>সময় (ঐচ্ছিক)</label><input type="time" name="সময়">
-      <label>কাজ</label><input type="text" name="কাজ" placeholder="যেমন: কুরআন তিলাওয়াত" required>
+      <label>কাজ</label><input type="text" name="কাজ" placeholder="যেমন: বই পড়া, ভিডিও এডিট" required>
+      <label>অগ্রগতি কীভাবে মাপবেন</label>
+      <div style="display:flex;gap:8px;margin-bottom:10px;">
+        <button type="button" class="btn small rt-track-btn active" data-track="চেক">✓ চেকমার্ক</button>
+        <button type="button" class="btn small ghost rt-track-btn" data-track="সংখ্যা">🔢 সংখ্যা দিয়ে</button>
+      </div>
+      <div id="rtNumWrap" style="display:none">
+        <label>একক</label><input type="text" name="একক" placeholder="যেমন: পৃষ্ঠা, মিনিট, পর্ব, শব্দ">
+        <label>মোট লক্ষ্য (ঐচ্ছিক)</label><input type="number" name="লক্ষ্য" placeholder="খালি রাখলে কোনো নির্দিষ্ট লক্ষ্য থাকবে না" min="0" step="any">
+      </div>
       <button class="btn full" type="submit">যোগ করুন</button>
     </form>
     <button class="btn ghost full" id="addRoutineCloseBtn" style="margin-top:8px;">বাতিল</button>
@@ -475,7 +487,7 @@
 
 <!-- single action-sheet for a "তারিখ ভিত্তিক কাজ" row -->
 <div class="modal" id="rtActionModal">
-  <div class="modal-box">
+  <div class="modal-box"><button type="button" class="modal-x-close" aria-label="বন্ধ করুন" onclick="this.closest('.modal').querySelector('[id$=CloseBtn],[data-close-modal],[id$=CancelBtn]')?.click()">✕</button>
     <h3 id="rtActionTitle">কাজ</h3>
     <div id="rtActionButtons" style="display:flex;flex-direction:column;gap:8px;">
       <button type="button" class="btn full" data-act="done" style="margin-top:0;">✓ সম্পন্ন</button>
@@ -494,18 +506,27 @@
 
 <!-- routine history search modal -->
 <div class="modal" id="routineHistoryModal">
-  <div class="modal-box">
+  <div class="modal-box"><button type="button" class="modal-x-close" aria-label="বন্ধ করুন" onclick="this.closest('.modal').querySelector('[id$=CloseBtn],[data-close-modal],[id$=CancelBtn]')?.click()">✕</button>
     <h3>রুটিন ইতিহাস</h3>
-    <label>তারিখ বেছে নিন</label>
-    <input type="date" id="rtHistoryDate">
-    <div id="rtHistoryBody" style="margin-top:12px;font-size:13px;line-height:1.7;"></div>
+    <div id="rtHistoryDailyView">
+      <label>তারিখ বেছে নিন</label>
+      <input type="date" id="rtHistoryDate">
+      <button class="btn ghost full" id="rtOpenMonthViewBtn" style="margin-top:10px;">📅 ১ মাসের ইতিহাস দেখুন</button>
+      <div id="rtHistoryBody" style="margin-top:12px;font-size:13px;line-height:1.7;"></div>
+    </div>
+    <div id="rtHistoryMonthView" style="display:none;">
+      <label>মাস বেছে নিন</label>
+      <input type="month" id="rtHistoryMonth">
+      <button class="btn ghost full" id="rtBackToDailyBtn" style="margin-top:10px;">◀ দৈনিক ইতিহাসে ফিরুন</button>
+      <div id="rtMonthHistoryBody" style="margin-top:12px;font-size:13px;line-height:1.7;"></div>
+    </div>
     <button class="btn ghost full" id="rtHistoryCloseBtn" style="margin-top:14px;">বন্ধ করুন</button>
   </div>
 </div>
 
 <!-- password manager: master password gate -->
 <div class="modal" id="pwAuthModal">
-  <div class="modal-box">
+  <div class="modal-box"><button type="button" class="modal-x-close" aria-label="বন্ধ করুন" onclick="this.closest('.modal').querySelector('[id$=CloseBtn],[data-close-modal],[id$=CancelBtn]')?.click()">✕</button>
     <h3 id="pwAuthTitle">মাস্টার পাসওয়ার্ড দিন</h3>
     <div id="pwAuthHint" style="display:none;font-size:12px;color:var(--muted);margin-bottom:8px;">এই পাসওয়ার্ড দিয়েই ভবিষ্যতে আপনার সব এন্ট্রি এনক্রিপ্ট/ডিক্রিপ্ট হবে — ভুলে গেলে পুরনো এন্ট্রি আর দেখা যাবে না, তাই মনে রাখুন।</div>
     <input type="password" id="pwAuthInput" placeholder="••••••••">
@@ -522,7 +543,7 @@
 
 <!-- password manager: view credentials -->
 <div class="modal" id="pwCredsModal">
-  <div class="modal-box">
+  <div class="modal-box"><button type="button" class="modal-x-close" aria-label="বন্ধ করুন" onclick="this.closest('.modal').querySelector('[id$=CloseBtn],[data-close-modal],[id$=CancelBtn]')?.click()">✕</button>
     <h3>লগইন তথ্য</h3>
     <div id="pwCredsBody" style="font-size:14px;line-height:2;"></div>
     <button class="btn ghost full" id="pwCredsCloseBtn" style="margin-top:14px;">বন্ধ করুন</button>
@@ -531,7 +552,7 @@
 
 <!-- password manager: view description -->
 <div class="modal" id="pwDescModal">
-  <div class="modal-box">
+  <div class="modal-box"><button type="button" class="modal-x-close" aria-label="বন্ধ করুন" onclick="this.closest('.modal').querySelector('[id$=CloseBtn],[data-close-modal],[id$=CancelBtn]')?.click()">✕</button>
     <h3>বিবরণ</h3>
     <div id="pwDescBody" style="font-size:14px;line-height:1.7;white-space:pre-wrap;word-break:break-word;"></div>
     <button class="btn ghost full" id="pwDescCloseBtn" style="margin-top:14px;">বন্ধ করুন</button>
@@ -540,7 +561,7 @@
 
 <!-- password manager: change master password -->
 <div class="modal" id="pwChangeModal">
-  <div class="modal-box">
+  <div class="modal-box"><button type="button" class="modal-x-close" aria-label="বন্ধ করুন" onclick="this.closest('.modal').querySelector('[id$=CloseBtn],[data-close-modal],[id$=CancelBtn]')?.click()">✕</button>
     <h3 id="pwChangeTitle">মাস্টার পাসওয়ার্ড পরিবর্তন করুন</h3>
     <div id="pwChangeOldWrap">
       <label>আগের মাস্টার পাসওয়ার্ড</label>
@@ -560,7 +581,7 @@
 
 <!-- password manager: add new entry -->
 <div class="modal" id="pwAddModal">
-  <div class="modal-box">
+  <div class="modal-box"><button type="button" class="modal-x-close" aria-label="বন্ধ করুন" onclick="this.closest('.modal').querySelector('[id$=CloseBtn],[data-close-modal],[id$=CancelBtn]')?.click()">✕</button>
     <h3>➕ নতুন এন্ট্রি যোগ করুন</h3>
     <form id="pwForm">
       <label>সাইট / সফটওয়্যারের নাম</label>
@@ -1162,9 +1183,22 @@ async function setCashTotal(total){
   }
 }
 function cashDeltaForFinance(type, amount){
-  if(type==='আয়') return amount;
+  if(type==='আয়' || type==='রিসিভ') return amount;
   if(type==='খরচ') return -amount;
   return 0;
+}
+function financeTypeClass(type){
+  if(type==='আয়') return 'income';
+  if(type==='রিসিভ') return 'receive';
+  return 'expense';
+}
+function financeTypeSign(type){
+  return (type==='আয়' || type==='রিসিভ') ? '+' : '−';
+}
+function financeTypeLabel(type){
+  if(type==='আয়') return 'আয়';
+  if(type==='রিসিভ') return 'রিসিভ';
+  return 'খরচ';
 }
 function cashDeltaForLedger(dhoron, lenden, amount){
   if(dhoron==='দেনাদার') return lenden==='বৃদ্ধি' ? -amount : amount;
@@ -1340,11 +1374,11 @@ function buildFinanceActivities(){
     items.push({
       date: r['তারিখ']||'',
       time: r['সময়']||'',
-      desc: `${r['ক্যাটাগরি']||(r['ধরন']||'')}${r['নোট']? ' — '+r['নোট'] : ''}`,
+      desc: `${r['ক্যাটাগরি']||financeTypeLabel(r['ধরন'])}${r['নোট']? ' — '+r['নোট'] : ''}`,
       meta: r['অ্যাকাউন্ট'] && r['অ্যাকাউন্ট']!=='ক্যাশ' ? r['অ্যাকাউন্ট'] : '',
       amount: Number(r['পরিমাণ'])||0,
-      sign: r['ধরন']==='আয়' ? '+' : '−',
-      cls: r['ধরন']==='আয়' ? 'income' : 'expense'
+      sign: financeTypeSign(r['ধরন']),
+      cls: financeTypeClass(r['ধরন'])
     });
   });
   cache.ledger.forEach(r=>{
@@ -1378,12 +1412,14 @@ function buildFinanceActivities(){
 
 function renderFinance(){
   const rows = [...cache.finance].sort((a,b)=> (b['তারিখ']||'').localeCompare(a['তারিখ']||''));
-  let income=0, expense=0;
+  let income=0, expense=0, receive=0;
   const currentYm = todayStr().slice(0,7);
   rows.forEach(r=>{
     const amt=Number(r['পরিমাণ'])||0;
     if((r['তারিখ']||'').slice(0,7)!==currentYm) return; // শুধু চলতি মাসের হিসাব
-    if(r['ধরন']==='আয়') income+=amt; else expense+=amt;
+    if(r['ধরন']==='আয়') income+=amt;
+    else if(r['ধরন']==='খরচ') expense+=amt;
+    else if(r['ধরন']==='রিসিভ') receive+=amt;
   });
   const balances = computePersonBalances();
   let totalReceivable=0, totalPayable=0;
@@ -1448,6 +1484,10 @@ function renderFinance(){
       <div class="summary-chip" id="expenseChip" style="cursor:pointer;"><div class="lbl">খরচ (এই মাস)</div><div class="val" style="color:var(--clay)">৳${fmtAmt(expense)}</div></div>
       <div class="summary-chip" id="cashChip" style="cursor:pointer;border-color:var(--gold);"><div class="lbl">ক্যাশ</div><div class="val" style="color:var(--gold)">৳${fmtAmt(cashTotal)}</div></div>
     </div>
+    ${cache.finance.some(r=>r['ধরন']==='রিসিভ') ? `
+    <div class="summary-bar">
+      <div class="summary-chip" id="receiveChip" style="cursor:pointer;border-color:var(--gold);"><div class="lbl">রিসিভ (এই মাস) — আয় নয়</div><div class="val" style="color:var(--gold)">৳${fmtAmt(receive)}</div></div>
+    </div>` : ''}
     <div class="summary-bar">
       <div class="summary-chip"><div class="lbl">ব্যালেন্স</div><div class="val">৳${fmtAmt(balanceTotal)}</div></div>
       <div class="summary-chip" id="receivableChip" style="cursor:pointer;"><div class="lbl">দেনাদার</div><div class="val" style="color:var(--sage)">৳${fmtAmt(totalReceivable)}</div></div>
@@ -1501,7 +1541,7 @@ function renderFinance(){
       </div>
       <button class="btn ghost small full" id="financeHistoryMoreBtn" style="margin-top:10px;display:none;">আরও দেখুন</button>
     </div>
-    <div class="modal" id="newEntryModal"><div class="modal-box" style="max-width:520px;">
+    <div class="modal" id="newEntryModal"><div class="modal-box" style="max-width:520px;"><button type="button" class="modal-x-close" aria-label="বন্ধ করুন" onclick="this.closest('.modal').querySelector('[id$=CloseBtn],[data-close-modal],[id$=CancelBtn]')?.click()">✕</button>
       <h2>নতুন এন্ট্রি</h2>
       <form id="finForm">
         <div class="row2">
@@ -1509,6 +1549,7 @@ function renderFinance(){
           <div><label>ধরন</label>
             <select name="ধরন" id="finType">
               <option value="আয়">আয়</option>
+              <option value="রিসিভ">রিসিভ (গিফট/সাহায্য)</option>
               <option value="খরচ" selected>খরচ</option>
               <option value="দেনাদার">ধার দিলাম</option>
               <option value="পাওনাদার">ধার নিলাম</option>
@@ -1544,7 +1585,7 @@ function renderFinance(){
       </form>
       <button class="btn ghost full" data-close-modal="newEntryModal" style="margin-top:10px;">বন্ধ করুন</button>
     </div></div>
-    <div class="modal" id="entriesModal"><div class="modal-box" style="max-width:520px;">
+    <div class="modal" id="entriesModal"><div class="modal-box" style="max-width:520px;"><button type="button" class="modal-x-close" aria-label="বন্ধ করুন" onclick="this.closest('.modal').querySelector('[id$=CloseBtn],[data-close-modal],[id$=CancelBtn]')?.click()">✕</button>
       <h2>আয়-খরচের এন্ট্রি (খুঁজুন ও দেখুন)</h2>
       <div class="row2" style="margin-bottom:8px;">
         <div><label>ক্যাটাগরি</label><select id="finFilterCat"><option value="">সব ক্যাটাগরি</option></select></div>
@@ -1562,7 +1603,7 @@ function renderFinance(){
       <div id="finList"></div>
       <button class="btn ghost full" data-close-modal="entriesModal" style="margin-top:10px;">বন্ধ করুন</button>
     </div></div>
-    <div class="modal" id="ledgerModal"><div class="modal-box" style="max-width:520px;">
+    <div class="modal" id="ledgerModal"><div class="modal-box" style="max-width:520px;"><button type="button" class="modal-x-close" aria-label="বন্ধ করুন" onclick="this.closest('.modal').querySelector('[id$=CloseBtn],[data-close-modal],[id$=CancelBtn]')?.click()">✕</button>
       <h2>দেনা-পাওনার লেনদেন (খুঁজুন ও দেখুন)</h2>
       <div class="row2" style="margin-bottom:8px;">
         <div><label>নাম</label><select id="ledgerFilterName"><option value="">সবাই</option>${names.map(n=>`<option value="${n}" ${ledgerFilter.name===n?'selected':''}>${n}</option>`).join('')}</select></div>
@@ -1586,7 +1627,7 @@ function renderFinance(){
       <div id="ledgerList"></div>
       <button class="btn ghost full" data-close-modal="ledgerModal" style="margin-top:10px;">বন্ধ করুন</button>
     </div></div>
-    <div class="modal" id="accountsModal"><div class="modal-box" style="max-width:520px;">
+    <div class="modal" id="accountsModal"><div class="modal-box" style="max-width:520px;"><button type="button" class="modal-x-close" aria-label="বন্ধ করুন" onclick="this.closest('.modal').querySelector('[id$=CloseBtn],[data-close-modal],[id$=CancelBtn]')?.click()">✕</button>
       <h2>🏦 অ্যাকাউন্ট</h2>
       <div id="accountList">
         <div class="ledger-row"><span>ক্যাশ</span><span class="amt" style="color:var(--gold)">৳${fmtAmt(cashTotal)}</span></div>
@@ -1606,7 +1647,7 @@ function renderFinance(){
       </form>
       <button class="btn ghost full" data-close-modal="accountsModal" style="margin-top:10px;">বন্ধ করুন</button>
     </div></div>
-    <div class="modal" id="transferModal"><div class="modal-box" style="max-width:520px;">
+    <div class="modal" id="transferModal"><div class="modal-box" style="max-width:520px;"><button type="button" class="modal-x-close" aria-label="বন্ধ করুন" onclick="this.closest('.modal').querySelector('[id$=CloseBtn],[data-close-modal],[id$=CancelBtn]')?.click()">✕</button>
       <h2>🔄 এক অ্যাকাউন্ট থেকে আরেক অ্যাকাউন্টে (উইড্র/জমা)</h2>
       <p style="font-size:12px;color:var(--muted);margin:0 0 10px;">যেমন: ব্যাংক থেকে টাকা তুলে ক্যাশ করলে, বা ক্যাশ থেকে বিকাশে টাকা ঢুকালে — এখানে দিন। এটা আয়/খরচ হিসেবে গণনা হবে না, শুধু এক অ্যাকাউন্টের টাকা আরেক অ্যাকাউন্টে সরানো হবে।</p>
       <form id="transferForm">
@@ -1639,7 +1680,7 @@ function renderFinance(){
       </div>
       <button class="btn ghost full" data-close-modal="transferModal" style="margin-top:10px;">বন্ধ করুন</button>
     </div></div>
-    <div class="modal" id="trendModal"><div class="modal-box" style="max-width:520px;">
+    <div class="modal" id="trendModal"><div class="modal-box" style="max-width:520px;"><button type="button" class="modal-x-close" aria-label="বন্ধ করুন" onclick="this.closest('.modal').querySelector('[id$=CloseBtn],[data-close-modal],[id$=CancelBtn]')?.click()">✕</button>
       <h2>📈 মাসিক ট্রেন্ড (গত ৬ মাস)</h2>
       <div style="display:flex;align-items:flex-end;gap:10px;height:160px;padding-top:10px;">
         ${trendData.map(t=>`
@@ -1657,7 +1698,7 @@ function renderFinance(){
       </div>
       <button class="btn ghost full" data-close-modal="trendModal" style="margin-top:10px;">বন্ধ করুন</button>
     </div></div>
-    <div class="modal" id="pieModal"><div class="modal-box" style="max-width:520px;">
+    <div class="modal" id="pieModal"><div class="modal-box" style="max-width:520px;"><button type="button" class="modal-x-close" aria-label="বন্ধ করুন" onclick="this.closest('.modal').querySelector('[id$=CloseBtn],[data-close-modal],[id$=CancelBtn]')?.click()">✕</button>
       <h2>🥧 এই মাসের খরচ — ক্যাটাগরি অনুযায়ী</h2>
       ${pieEntries.length ? `
       <div style="display:flex;gap:20px;align-items:center;flex-wrap:wrap;">
@@ -1672,7 +1713,7 @@ function renderFinance(){
       </div>` : '<div class="empty">এই মাসে কোনো খরচ নেই</div>'}
       <button class="btn ghost full" data-close-modal="pieModal" style="margin-top:10px;">বন্ধ করুন</button>
     </div></div>
-    <div class="modal" id="exportModal"><div class="modal-box" style="max-width:520px;">
+    <div class="modal" id="exportModal"><div class="modal-box" style="max-width:520px;"><button type="button" class="modal-x-close" aria-label="বন্ধ করুন" onclick="this.closest('.modal').querySelector('[id$=CloseBtn],[data-close-modal],[id$=CancelBtn]')?.click()">✕</button>
       <h2>⬇ রিপোর্ট এক্সপোর্ট</h2>
       <label>সময়কাল</label>
       <select id="reportPeriodSel">
@@ -1690,6 +1731,8 @@ function renderFinance(){
 
   document.getElementById('incomeChip').addEventListener('click', ()=>renderCategoriesView('আয়', currentYm));
   document.getElementById('expenseChip').addEventListener('click', ()=>renderCategoriesView('খরচ', currentYm));
+  const receiveChipEl = document.getElementById('receiveChip');
+  if(receiveChipEl) receiveChipEl.addEventListener('click', ()=>renderCategoriesView('রিসিভ', currentYm));
   document.getElementById('receivableChip').addEventListener('click', showReceivableList);
   document.getElementById('payableChip').addEventListener('click', showPayableList);
   document.getElementById('cashChip').addEventListener('click', async ()=>{
@@ -1820,7 +1863,7 @@ function renderFinance(){
           <div class="ledger-meta">${fmtDMY(r['তারিখ'])}${r['অ্যাকাউন্ট'] && r['অ্যাকাউন্ট']!=='ক্যাশ' ? ' · '+r['অ্যাকাউন্ট'] : ''}</div>
         </div>
         <div style="display:flex;align-items:center;gap:8px;">
-          <span class="amt ${r['ধরন']==='আয়'?'income':'expense'}">${r['ধরন']==='আয়'?'+':'−'}৳${r['পরিমাণ']}</span>
+          <span class="amt ${financeTypeClass(r['ধরন'])}">${financeTypeSign(r['ধরন'])}৳${r['পরিমাণ']}</span>
           <button class="del" data-id="${r['ID']}" title="মুছুন">✕</button>
         </div>`;
       list.appendChild(div);
@@ -2070,8 +2113,8 @@ function ensurePrintStyles(){
    দেখায় ঠিক সেভাবেই আসে, আর লেখাও সিলেক্ট/কপি করা যায় */
 function printFinanceReport(rows, period){
   ensurePrintStyles();
-  let income=0, expense=0;
-  rows.forEach(r=>{ const a=Number(r['পরিমাণ'])||0; if(r['ধরন']==='আয়') income+=a; else if(r['ধরন']==='খরচ') expense+=a; });
+  let income=0, expense=0, receive=0;
+  rows.forEach(r=>{ const a=Number(r['পরিমাণ'])||0; if(r['ধরন']==='আয়') income+=a; else if(r['ধরন']==='খরচ') expense+=a; else if(r['ধরন']==='রিসিভ') receive+=a; });
   const title = period ? (period==='year' ? 'বাৎসরিক রিপোর্ট '+todayStr().slice(0,4) : 'মাসিক রিপোর্ট — '+getMonthLabel(period)) : 'মাসিক রিপোর্ট (চলতি মাস)';
   const rowsHtml = rows.map(r=>`
     <tr>
@@ -2091,9 +2134,10 @@ function printFinanceReport(rows, period){
     <div style="padding:20px;">
       <h2 style="margin:0 0 4px;">${title}</h2>
       <div style="font-size:13px;color:#555;margin-bottom:14px;">তৈরি হয়েছে: ${todayStr()}</div>
-      <div style="display:flex;gap:20px;margin-bottom:16px;font-size:14px;">
+      <div style="display:flex;gap:20px;margin-bottom:16px;font-size:14px;flex-wrap:wrap;">
         <div><b>মোট আয়:</b> ৳${fmtAmt(income)}</div>
         <div><b>মোট খরচ:</b> ৳${fmtAmt(expense)}</div>
+        ${receive ? `<div><b>মোট রিসিভ (আয় নয়):</b> ৳${fmtAmt(receive)}</div>` : ''}
         <div><b>নিট:</b> ৳${fmtAmt(income-expense)}</div>
       </div>
       <table>
@@ -2154,7 +2198,7 @@ function renderMonthsView(type){
     groups[ym].count += 1;
   });
   const entries = Object.entries(groups).sort((a,b)=>b[0].localeCompare(a[0]));
-  const cls = type==='আয়' ? 'income' : 'expense';
+  const cls = financeTypeClass(type);
   const grandTotal = entries.reduce((s,[,g])=>s+g.total, 0);
   const listHtml = entries.length ? entries.map(([ym,g])=>`
     <div class="ledger-row month-row" data-ym="${ym}" style="cursor:pointer">
@@ -2167,7 +2211,7 @@ function renderMonthsView(type){
   const totalHtml = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--rule);">
       <span>সর্বমোট (সব মাস)</span><b class="amt ${cls}">৳${fmtAmt(grandTotal)}</b></div>`;
 
-  document.getElementById('detailsTitle').textContent = (type==='আয়'?'সমস্ত আয়':'সমস্ত খরচ');
+  document.getElementById('detailsTitle').textContent = 'সমস্ত ' + financeTypeLabel(type);
   document.getElementById('detailsBody').innerHTML = financeViewToggle(type,'months') + totalHtml + listHtml;
   document.getElementById('detailsModal').classList.add('show');
   wireFinanceToggle(type);
@@ -2188,7 +2232,7 @@ function renderCategoriesView(type, ym){
     groups[cat].count += 1;
   });
   const entries = Object.entries(groups).sort((a,b)=>b[1].total-a[1].total);
-  const cls = type==='আয়' ? 'income' : 'expense';
+  const cls = financeTypeClass(type);
   const grandTotal = entries.reduce((s,[,g])=>s+g.total, 0);
   const listHtml = entries.length ? entries.map(([cat,g])=>`
     <div class="ledger-row cat-summary-row" data-cat="${cat}" style="cursor:pointer">
@@ -2203,7 +2247,7 @@ function renderCategoriesView(type, ym){
 
   document.getElementById('detailsTitle').textContent = ym
     ? getMonthLabel(ym) + ' — ক্যাটাগরি অনুযায়ী'
-    : (type==='আয়'?'সমস্ত আয় — ক্যাটাগরি অনুযায়ী':'সমস্ত খরচ — ক্যাটাগরি অনুযায়ী');
+    : `সমস্ত ${financeTypeLabel(type)} — ক্যাটাগরি অনুযায়ী`;
 
   const headHtml = ym
     ? `<div class="notice-toggle back-to-months" style="margin-bottom:10px;">← মাসের লিস্টে ফিরে যান</div>`
@@ -2229,7 +2273,7 @@ function renderEntriesView(type, cat, ym){
     if(ym && (r['তারিখ']||'').slice(0,7)!==ym) return false;
     return true;
   }).sort((a,b)=>(b['তারিখ']||'').localeCompare(a['তারিখ']||''));
-  const cls = type==='আয়' ? 'income' : 'expense';
+  const cls = financeTypeClass(type);
   const total = rows.reduce((s,r)=>s+(Number(r['পরিমাণ'])||0),0);
 
   const backHtml = `<div class="notice-toggle back-to-categories" style="margin-bottom:10px;">← ফিরে যান</div>`;
@@ -2369,7 +2413,7 @@ function renderPrayer(){
       ${islamicNoticesHtml.more? `<div class="notice-toggle" id="moreToggle">▼ আরো ইসলামিক নোটিশ</div><div class="more-notices" id="moreNotices">${islamicNoticesHtml.more}</div>` : ''}
     </div>
 
-    <div class="modal" id="customAmalModal"><div class="modal-box" style="max-width:460px;">
+    <div class="modal" id="customAmalModal"><div class="modal-box" style="max-width:460px;"><button type="button" class="modal-x-close" aria-label="বন্ধ করুন" onclick="this.closest('.modal').querySelector('[id$=CloseBtn],[data-close-modal],[id$=CancelBtn]')?.click()">✕</button>
       <h3>📿 আমল সেট করুন</h3>
       <form id="customAmalForm">
         <label>তারিখ কীভাবে দেবেন</label>
@@ -2458,7 +2502,7 @@ function renderPrayer(){
       </div>
     </div>
 
-    <div class="modal" id="quranTrackerModal"><div class="modal-box" style="max-width:480px;">
+    <div class="modal" id="quranTrackerModal"><div class="modal-box" style="max-width:480px;"><button type="button" class="modal-x-close" aria-label="বন্ধ করুন" onclick="this.closest('.modal').querySelector('[id$=CloseBtn],[data-close-modal],[id$=CancelBtn]')?.click()">✕</button>
       <h3>📖 কুরআন খতম ট্র্যাকার</h3>
       ${quranTotal===null ? `
         <p style="font-size:13px;color:var(--muted);margin-bottom:10px;">শুরু করতে আপনার কুরআনের মোট পৃষ্ঠা সংখ্যা দিন (সাধারণত ৬০৪ পৃষ্ঠা)।</p>
@@ -3048,7 +3092,7 @@ document.getElementById('rakatSaveBtn').addEventListener('click', async ()=>{
 });
 
 /* ---------------- ROUTINE: shared helpers (log, postpone-count, missed detection) ---------------- */
-async function logRoutineEvent(routineId, task, event, dueDate, newDate, note){
+async function logRoutineEvent(routineId, task, event, dueDate, newDate, note, amount){
   const now = new Date();
   const data = {
     'RoutineID': routineId,
@@ -3059,6 +3103,7 @@ async function logRoutineEvent(routineId, task, event, dueDate, newDate, note){
     'নোট': note || '',
     'সময়': todayStr() + ' ' + String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0')
   };
+  if(amount!==undefined && amount!==null && amount!=='') data['পরিমাণ'] = Number(amount);
   try{
     const res = await apiPost('রুটিন_লগ', 'add', null, data);
     cache.routineLog.push({...data, ID: res.id});
@@ -3066,6 +3111,34 @@ async function logRoutineEvent(routineId, task, event, dueDate, newDate, note){
 }
 function getPostponeCount(routineId){
   return cache.routineLog.filter(l=>l['RoutineID']===routineId && l['ইভেন্ট']==='পিছানো').length;
+}
+// একটা সংখ্যা-ভিত্তিক (numeric) কাজের এখন পর্যন্ত মোট অগ্রগতি — সব দিনের লগ করা পরিমাণ যোগ করে বের করা হয়
+function getRoutineProgressTotal(routineId){
+  return cache.routineLog
+    .filter(l=>l['RoutineID']===routineId && l['ইভেন্ট']==='সম্পন্ন' && l['পরিমাণ']!==undefined && l['পরিমাণ']!==null && l['পরিমাণ']!=='')
+    .reduce((sum,l)=>sum + Number(l['পরিমাণ']||0), 0);
+}
+// সংখ্যা-ভিত্তিক কাজের জন্য প্রগ্রেস লেখার ছোট্ট টেক্সট — লক্ষ্য থাকলে "১২০/৩০০ পৃষ্ঠা (৪০%)", না থাকলে শুধু "মোট ১২০ পৃষ্ঠা"
+// সংখ্যা-ভিত্তিক কাজে "সম্পন্ন" চাপলে আজ কতটুকু হলো তা জিজ্ঞেস করা হয়
+// রিটার্ন করে: সংখ্যা (ঠিক আছে), null (ব্যবহারকারী বাতিল করেছেন), undefined (ভুল মান দিয়েছেন)
+function promptRoutineAmount(r){
+  const unit = r['একক']||'';
+  const val = window.prompt(`আজ কতটুকু ${unit? unit+' ':''}হলো?`, '');
+  if(val===null) return null;
+  const num = Number(val);
+  if(val.trim()==='' || isNaN(num) || num<0){ toast('সঠিক সংখ্যা দিন'); return undefined; }
+  return num;
+}
+function formatRoutineProgress(r){
+  if(r['ট্র্যাক_ধরন']!=='সংখ্যা') return '';
+  const total = getRoutineProgressTotal(r['ID']);
+  const unit = r['একক']||'';
+  const target = r['লক্ষ্য'];
+  if(target){
+    const pct = Math.min(100, Math.round(total/target*100));
+    return `${toBn(total)}/${toBn(target)} ${unit} (${toBn(pct)}%)`;
+  }
+  return `মোট ${toBn(total)} ${unit}`;
 }
 async function detectMissedRoutines(){
   const today = todayStr();
@@ -3276,16 +3349,24 @@ async function detectMissedFardForQaza(){
 
 /* ---------------- ROUTINE: "নতুন কাজ যোগ করুন" popup (wired once) ---------------- */
 let rtType = 'সাপ্তাহিক';
+let rtTrack = 'চেক';
 function openAddRoutineModal(){
   document.getElementById('rtForm').reset();
   rtType = 'সাপ্তাহিক';
+  rtTrack = 'চেক';
   document.querySelectorAll('#addRoutineModal .rt-type-btn').forEach(b=>{
     const active = b.dataset.type==='সাপ্তাহিক';
     b.classList.toggle('active', active);
     b.classList.toggle('ghost', !active);
   });
+  document.querySelectorAll('#addRoutineModal .rt-track-btn').forEach(b=>{
+    const active = b.dataset.track==='চেক';
+    b.classList.toggle('active', active);
+    b.classList.toggle('ghost', !active);
+  });
   document.getElementById('rtDayWrap').style.display='block';
   document.getElementById('rtDateWrap').style.display='none';
+  document.getElementById('rtNumWrap').style.display='none';
   document.querySelector('#rtDateWrap input[name="তারিখ"]').value = todayStr();
   document.getElementById('addRoutineModal').classList.add('show');
 }
@@ -3301,13 +3382,28 @@ document.querySelectorAll('#addRoutineModal .rt-type-btn').forEach(btn=>{
     document.getElementById('rtDateWrap').style.display = rtType==='তারিখ' ? 'block':'none';
   });
 });
+document.querySelectorAll('#addRoutineModal .rt-track-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    rtTrack = btn.dataset.track;
+    document.querySelectorAll('#addRoutineModal .rt-track-btn').forEach(b=>{
+      b.classList.toggle('active', b===btn);
+      b.classList.toggle('ghost', b!==btn);
+    });
+    document.getElementById('rtNumWrap').style.display = rtTrack==='সংখ্যা' ? 'block':'none';
+  });
+});
 document.getElementById('rtForm').addEventListener('submit', async e=>{
   e.preventDefault();
   const fd = Object.fromEntries(new FormData(e.target).entries());
   if(!(fd['কাজ']||'').trim()){ toast('কাজের নাম দিন'); return; }
-  const data = { 'ধরন': rtType, 'কাজ': fd['কাজ'], 'সময়': fd['সময়']||'', 'স্ট্যাটাস':'বাকি' };
+  if(rtTrack==='সংখ্যা' && !(fd['একক']||'').trim()){ toast('একক দিন (যেমন: পৃষ্ঠা)'); return; }
+  const data = { 'ধরন': rtType, 'কাজ': fd['কাজ'], 'সময়': fd['সময়']||'', 'স্ট্যাটাস':'বাকি', 'ট্র্যাক_ধরন': rtTrack };
   if(rtType==='সাপ্তাহিক'){ data['দিন'] = fd['দিন']; data['তারিখ'] = ''; }
   else { data['তারিখ'] = fd['তারিখ']||todayStr(); data['দিন'] = ''; }
+  if(rtTrack==='সংখ্যা'){
+    data['একক'] = (fd['একক']||'').trim();
+    data['লক্ষ্য'] = fd['লক্ষ্য'] ? Number(fd['লক্ষ্য']) : '';
+  }
   try{
     const res = await apiPost('রুটিন','add', null, data);
     cache.routine.push({...data, ID:res.id});
@@ -3338,13 +3434,19 @@ document.getElementById('rtActionCloseBtn').addEventListener('click', closeRtAct
 document.querySelector('#rtActionButtons [data-act="done"]').addEventListener('click', async ()=>{
   const r = cache.routine.find(x=>x['ID']===rtActionId);
   if(!r) return;
+  let amount;
+  if(r['ট্র্যাক_ধরন']==='সংখ্যা'){
+    amount = promptRoutineAmount(r);
+    if(amount===null || amount===undefined) return;
+  }
   try{
     await apiPost('রুটিন','update', r['ID'], {'স্ট্যাটাস':'সম্পন্ন'});
-    await logRoutineEvent(r['ID'], r['কাজ'], 'সম্পন্ন', r['তারিখ'], '', '');
+    await logRoutineEvent(r['ID'], r['কাজ'], 'সম্পন্ন', r['তারিখ'], '', '', amount);
     r['স্ট্যাটাস']='সম্পন্ন';
     closeRtActionModal();
     if(activeTab==='routine') renderRoutine();
-    updateHeaderLine(); toast('সম্পন্ন হিসেবে চিহ্নিত হলো');
+    updateHeaderLine();
+    toast(amount!==undefined ? `${toBn(amount)} ${r['একক']||''} যোগ হলো` : 'সম্পন্ন হিসেবে চিহ্নিত হলো');
   }catch(err){ toast('হালনাগাদ করা যায়নি'); }
 });
 document.querySelector('#rtActionButtons [data-act="skip"]').addEventListener('click', async ()=>{
@@ -3392,6 +3494,8 @@ document.querySelector('#rtActionButtons [data-act="delete"]').addEventListener(
 
 /* ---------------- ROUTINE: ইতিহাস (history search by date, wired once) ---------------- */
 function openRoutineHistory(){
+  document.getElementById('rtHistoryDailyView').style.display = '';
+  document.getElementById('rtHistoryMonthView').style.display = 'none';
   const d = document.getElementById('rtHistoryDate');
   d.value = todayStr();
   renderRoutineHistoryFor(todayStr());
@@ -3399,6 +3503,25 @@ function openRoutineHistory(){
 }
 document.getElementById('rtHistoryCloseBtn').addEventListener('click', ()=>document.getElementById('routineHistoryModal').classList.remove('show'));
 document.getElementById('rtHistoryDate').addEventListener('change', e=>renderRoutineHistoryFor(e.target.value));
+function switchToDailyRoutineView(dateStr){
+  document.getElementById('rtHistoryMonthView').style.display = 'none';
+  document.getElementById('rtHistoryDailyView').style.display = '';
+  document.getElementById('rtHistoryDate').value = dateStr;
+  renderRoutineHistoryFor(dateStr);
+}
+document.getElementById('rtOpenMonthViewBtn').addEventListener('click', ()=>{
+  document.getElementById('rtHistoryDailyView').style.display = 'none';
+  document.getElementById('rtHistoryMonthView').style.display = '';
+  const monthInput = document.getElementById('rtHistoryMonth');
+  const curMonth = todayStr().slice(0,7);
+  monthInput.value = curMonth;
+  renderRoutineMonthHistory(curMonth);
+});
+document.getElementById('rtBackToDailyBtn').addEventListener('click', ()=>{
+  document.getElementById('rtHistoryMonthView').style.display = 'none';
+  document.getElementById('rtHistoryDailyView').style.display = '';
+});
+document.getElementById('rtHistoryMonth').addEventListener('change', e=>renderRoutineMonthHistory(e.target.value));
 function getRoutinesForDate(dateStr){
   const dayName = DAY_NAMES[new Date(dateStr+'T00:00:00').getDay()];
   const weekly = cache.routine.filter(r=>r['ধরন']!=='তারিখ' && r['দিন']===dayName);
@@ -3422,6 +3545,7 @@ function renderRoutineHistoryFor(dateStr){
   const dayName = DAY_NAMES[new Date(dateStr+'T00:00:00').getDay()];
   const items = getRoutinesForDate(dateStr);
 
+  const isPastDate = dateStr < todayStr();
   const tasksHtml = !items.length ? '<div class="empty">এই তারিখে কোনো কাজ নেই</div>' : `
     <table class="rt-today-table">
       <thead><tr><th>সময়</th><th>কাজ</th><th style="text-align:center;">স্ট্যাটাস</th></tr></thead>
@@ -3434,47 +3558,68 @@ function renderRoutineHistoryFor(dateStr){
           ? '<span class="status-pill skip">হবে না</span>'
           : done
             ? '<span class="status-pill done">সম্পন্ন</span>'
-            : `<input type="checkbox" class="rt-hist-chk" data-idx="${idx}">`;
+            : isPastDate
+              ? '<span class="status-pill" style="background:rgba(156,91,74,.18);color:var(--clay);">⚠️ মিসড</span>'
+              : '<span class="status-pill" style="background:rgba(122,117,102,.15);color:var(--muted);">বাকি</span>';
         return `<tr><td>${r['সময়']||'—'}</td><td>${r['কাজ']||''} ${badge}</td><td style="text-align:center;">${statusCell}</td></tr>`;
       }).join('')}</tbody>
     </table>`;
 
-  const missed = cache.routineLog.filter(l=>l['ইভেন্ট']==='মিসড' && l['তারিখ']===dateStr);
-  const skipped = cache.routineLog.filter(l=>l['ইভেন্ট']==='বাতিল' && l['তারিখ']===dateStr);
   const postponedFrom = cache.routineLog.filter(l=>l['ইভেন্ট']==='পিছানো' && l['তারিখ']===dateStr);
   const postponedTo = cache.routineLog.filter(l=>l['ইভেন্ট']==='পিছানো' && l['নতুন_তারিখ']===dateStr);
   const section = (title, listItems, renderItem) => !listItems.length ? '' :
     `<div style="margin-bottom:14px;"><div style="font-weight:600;color:var(--ink);margin-bottom:6px;">${title}</div>${listItems.map(renderItem).join('')}</div>`;
   let extraHtml = '';
-  extraHtml += section('⚠️ করেননি', missed, l=>`<div class="notice-item">${l['কাজ']}</div>`);
-  extraHtml += section('🚫 বাতিল করেছিলেন', skipped, l=>`<div class="notice-item">${l['কাজ']}</div>`);
   extraHtml += section('📅 এই তারিখ থেকে পিছিয়েছেন', postponedFrom, l=>`<div class="notice-item">${l['কাজ']} → ${fmtDMY(l['নতুন_তারিখ'])}${l['নোট']?`<div class="notice-sub">কারণ: ${l['নোট']}</div>`:''}</div>`);
   extraHtml += section('↪️ এই তারিখের জন্য পেছানো হয়েছিল', postponedTo, l=>`<div class="notice-item">${l['কাজ']} (আগের তারিখ ছিল ${fmtDMY(l['তারিখ'])})${l['নোট']?`<div class="notice-sub">কারণ: ${l['নোট']}</div>`:''}</div>`);
 
   body.innerHTML = `<div style="font-weight:600;color:var(--ink);margin-bottom:8px;">${dayName}-এর কাজ</div>` + tasksHtml + extraHtml;
+}
 
-  body.querySelectorAll('.rt-hist-chk').forEach(chk=>{
-    chk.addEventListener('change', async e=>{
-      if(!e.target.checked) return;
-      const item = items[Number(e.target.dataset.idx)];
-      const { r, kind } = item;
-      e.target.disabled = true;
-      try{
-        if(kind==='তারিখ'){
-          await apiPost('রুটিন','update', r['ID'], {'স্ট্যাটাস':'সম্পন্ন'});
-          r['স্ট্যাটাস']='সম্পন্ন';
-        }
-        await logRoutineEvent(r['ID'], r['কাজ'], 'সম্পন্ন', dateStr, '', '');
-        toast('সম্পন্ন হিসেবে চিহ্নিত হলো');
-        renderRoutineHistoryFor(dateStr);
-        updateHeaderLine();
-        if(activeTab==='routine') renderRoutine();
-      }catch(err){
-        toast('হালনাগাদ করা যায়নি');
-        e.target.disabled = false;
-        e.target.checked = false;
-      }
+function renderRoutineMonthHistory(monthStr){
+  const body = document.getElementById('rtMonthHistoryBody');
+  if(!monthStr){ body.innerHTML=''; return; }
+  const [yStr,mStr] = monthStr.split('-');
+  const y = Number(yStr), m = Number(mStr); // m: 1-12
+  const dim = new Date(y, m, 0).getDate();
+  const today = todayStr();
+  let sumDone=0, sumTotal=0, rows='';
+  for(let day=1; day<=dim; day++){
+    const dateStr = `${y}-${String(m).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    const items = getRoutinesForDate(dateStr);
+    const dayName = DAY_NAMES[new Date(dateStr+'T00:00:00').getDay()];
+    let done=0, cancelled=0;
+    items.forEach(item=>{
+      if(isRoutineCancelledForDate(item, dateStr)) cancelled++;
+      else if(isRoutineDoneForDate(item, dateStr)) done++;
     });
+    const total = items.length;
+    const countable = total - cancelled;
+    const isPastOrToday = dateStr <= today;
+    if(isPastOrToday){ sumDone += done; sumTotal += countable; }
+    let pill;
+    if(total===0){
+      pill = '<span style="color:var(--muted);">—</span>';
+    }else if(countable===0){
+      pill = '<span class="status-pill skip">বাতিল</span>';
+    }else if(done===countable){
+      pill = `<span class="status-pill done">${toBn(done)}/${toBn(countable)}</span>`;
+    }else if(isPastOrToday){
+      pill = `<span class="status-pill" style="background:rgba(156,91,74,.18);color:var(--clay);">${toBn(done)}/${toBn(countable)}</span>`;
+    }else{
+      pill = `<span class="status-pill" style="background:rgba(122,117,102,.15);color:var(--muted);">${toBn(done)}/${toBn(countable)}</span>`;
+    }
+    const isToday = dateStr===today;
+    rows += `<tr class="rt-month-row" data-date="${dateStr}" style="cursor:pointer;${isToday?'background:rgba(176,141,87,.12);':''}">
+      <td>${toBn(day)} <span style="color:var(--muted);font-size:11px;">${dayName}</span></td>
+      <td style="text-align:right;">${pill}</td>
+    </tr>`;
+  }
+  const pct = sumTotal>0 ? Math.round(sumDone/sumTotal*100) : 0;
+  const summaryHtml = `<div style="font-size:13px;color:var(--ink);margin-bottom:10px;font-weight:600;">এই মাসে এখন পর্যন্ত সম্পন্ন: ${toBn(sumDone)}/${toBn(sumTotal)} (${toBn(pct)}%)</div>`;
+  body.innerHTML = summaryHtml + `<table class="rt-today-table"><tbody>${rows}</tbody></table>`;
+  body.querySelectorAll('.rt-month-row').forEach(tr=>{
+    tr.addEventListener('click', ()=>switchToDailyRoutineView(tr.dataset.date));
   });
 }
 
@@ -3492,9 +3637,10 @@ function renderRoutine(){
       const done = isRoutineDoneForDate({r,kind}, today);
       const cancelled = isRoutineCancelledForDate({r,kind}, today);
       const badge = kind==='তারিখ' ? '<span class="badge bd">তারিখ</span>' : '<span class="badge">সাপ্তাহিক</span>';
+      const progressTxt = formatRoutineProgress(r);
       return `<tr data-id="${r['ID']}" data-kind="${kind}">
         <td>${r['সময়']||'—'}</td>
-        <td>${r['কাজ']||''} ${badge}</td>
+        <td>${r['কাজ']||''} ${badge}${progressTxt? `<div style="font-size:11px;color:var(--muted);">${progressTxt}</div>`:''}</td>
         <td style="text-align:center;">
           ${cancelled ? '<span class="status-pill skip">হবে না</span>' : done ? '<span class="status-pill done">সম্পন্ন</span>' :
              `<div style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap;">
@@ -3539,13 +3685,19 @@ function renderRoutine(){
       const id = tr.dataset.id;
       const kind = tr.dataset.kind;
       const rec = cache.routine.find(x=>x['ID']===id);
+      let amount;
+      if(rec['ট্র্যাক_ধরন']==='সংখ্যা'){
+        amount = promptRoutineAmount(rec);
+        if(amount===null || amount===undefined) return; // বাতিল করেছেন বা ভুল মান দিয়েছেন
+      }
       try{
         if(kind==='তারিখ'){
           await apiPost('রুটিন','update', id, {'স্ট্যাটাস':'সম্পন্ন'});
           rec['স্ট্যাটাস']='সম্পন্ন';
         }
-        await logRoutineEvent(id, rec['কাজ'], 'সম্পন্ন', today, '', '');
-        renderRoutine(); updateHeaderLine(); toast('সম্পন্ন হিসেবে চিহ্নিত হলো');
+        await logRoutineEvent(id, rec['কাজ'], 'সম্পন্ন', today, '', '', amount);
+        renderRoutine(); updateHeaderLine();
+        toast(amount!==undefined ? `${toBn(amount)} ${rec['একক']||''} যোগ হলো` : 'সম্পন্ন হিসেবে চিহ্নিত হলো');
       }catch(err){ toast('হালনাগাদ করা যায়নি'); }
     });
   });
@@ -3590,9 +3742,10 @@ function renderRoutine(){
         <thead><tr><th>তারিখ</th><th>কাজ</th><th style="text-align:center;">অ্যাকশন</th></tr></thead>
         <tbody>${dateItems.map(r=>{
           const pCount = getPostponeCount(r['ID']);
+          const progressTxt = formatRoutineProgress(r);
           return `<tr data-id="${r['ID']}">
             <td>${fmtDMY(r['তারিখ'])}${r['সময়']? `<br><span style="font-size:11px;color:var(--muted)">${r['সময়']}</span>`:''}</td>
-            <td>${r['কাজ']||''}${pCount? `<div class="postpone-meta" style="font-size:11px;">${toBn(pCount)} বার পিছানো হয়েছে</div>`:''}</td>
+            <td>${r['কাজ']||''}${progressTxt? `<div style="font-size:11px;color:var(--muted);">${progressTxt}</div>`:''}${pCount? `<div class="postpone-meta" style="font-size:11px;">${toBn(pCount)} বার পিছানো হয়েছে</div>`:''}</td>
             <td style="text-align:center;"><button type="button" class="btn small ghost rt-date-act-btn" data-id="${r['ID']}">⋯</button></td>
           </tr>`;
         }).join('')}</tbody>
@@ -3618,9 +3771,10 @@ function renderRoutine(){
       const doneToday = isToday && isRoutineDoneForDate({r,kind:'সাপ্তাহিক'}, today);
       const cancelledToday = isToday && isRoutineCancelledForDate({r,kind:'সাপ্তাহিক'}, today);
       row.className = 'task-row' + (doneToday? ' done':'');
+      const progressTxt = formatRoutineProgress(r);
       row.innerHTML = `
         <span class="time">${r['সময়']||''}</span>
-        <span class="t">${r['কাজ']||''}</span>
+        <span class="t">${r['কাজ']||''}${progressTxt? `<br><small style="font-size:11px;color:var(--muted);">${progressTxt}</small>`:''}</span>
         ${doneToday? '<span class="status-pill done">আজ সম্পন্ন</span>' : cancelledToday? '<span class="status-pill skip">আজ হবে না</span>' : ''}
         <button class="del">✕</button>`;
       row.querySelector('.del').addEventListener('click', async ()=>{
