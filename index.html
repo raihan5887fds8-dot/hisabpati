@@ -2486,14 +2486,31 @@ async function startNewMarketList(){
     renderMarket();
   }catch(e){ toast('তালিকা শুরু করা যায়নি'); }
 }
+// আগে এই ফাংশন প্রথমে সার্ভারে সেভ করার চেষ্টা করত, সফল হলেই cache আপডেট হতো।
+// নেট স্লো/অফলাইন থাকলে apiPost রিজেক্ট হয়ে যেত এবং সেই ব্যর্থতা কোথাও ধরা (catch) হতো
+// না — ফলে cache কখনো বদলাতোই না আর UI-ও রিফ্রেশ হতো না (চেক/আনচেক করলেও সর্বমোট/খরচ
+// হয়েছে একই রয়ে যেত, নতুন আইটেম যোগ করলেও টোটাল বাড়ত না)। এখন উল্টো ক্রমে করা হচ্ছে:
+// আগে cache-এ (আশাবাদীভাবে) বদলে ফেলে সাথে সাথে UI আপডেট দেখানো হয়, তারপর ব্যাকগ্রাউন্ডে
+// সার্ভারে সেভ করা হয়; সেভ ব্যর্থ হলে cache আগের অবস্থায় ফিরিয়ে এনে ব্যবহারকারীকে টোস্টে
+// জানানো হয়, যাতে হিসাব কখনো নিঃশব্দে স্ক্রিন আর ডাটাবেজের মধ্যে বেমিল না থাকে।
 async function updateMarketItems(listId, items){
-  await apiPost('বাজার','update', listId, {'আইটেম': items});
   const list = cache.market.find(m=>m['ID']===listId);
-  if(list) list['আইটেম'] = items;
+  if(!list) return false;
+  const prevItems = list['আইটেম'];
+  list['আইটেম'] = items; // অপটিমিস্টিক আপডেট
+  try{
+    await apiPost('বাজার','update', listId, {'আইটেম': items});
+    return true;
+  }catch(err){
+    list['আইটেম'] = prevItems; // সেভ ব্যর্থ হলে আগের অবস্থায় ফিরিয়ে নেওয়া
+    toast('সংরক্ষণ ব্যর্থ হয়েছে — ইন্টারনেট সংযোগ চেক করুন');
+    renderMarket();
+    return false;
+  }
 }
 async function addMarketItem(listId, item){
-  const list = cache.market.find(m=>m['ID']===listId); if(!list) return;
-  await updateMarketItems(listId, [...(list['আইটেম']||[]), item]);
+  const list = cache.market.find(m=>m['ID']===listId); if(!list) return false;
+  return await updateMarketItems(listId, [...(list['আইটেম']||[]), item]);
 }
 // আইটেম যোগ করার সময়ই দাম ও পরিমাণ লেখা হয়ে যায়, তাই চেকবক্সে চাপলে আর প্রম্পট
 // দেখানোর দরকার নেই — শুধু "কেনা" হয়েছে কিনা তা টগল হয়
@@ -2524,9 +2541,9 @@ async function quickAddMarketItem(name, qty, price, total, unit){
   // ইউজারকে নিজেই আজকের আসল দাম টাইপ করে নিশ্চিত করতে হবে।
   const item = { id:newMarketItemId(), 'নাম':name, 'পরিমাণ':qtyNum, 'দাম':0, 'মোট':0, 'একক': unit||'', 'কেনা':false };
   marketExpandedItems.add(item.id);
-  await addMarketItem(list['ID'], item);
+  const ok = await addMarketItem(list['ID'], item);
   renderMarket();
-  toast(name + ' তালিকায় যোগ হয়েছে');
+  if(ok) toast(name + ' তালিকায় যোগ হয়েছে');
 }
 // splits: [{type:'account', account, amount}] বা [{type:'ধার', person, amount}] — একাধিক মাধ্যম মিলিয়ে পুরো
 // টাকাটা পরিশোধ করা যায়। 'account' ধরনের অংশ সংশ্লিষ্ট অ্যাকাউন্ট/ক্যাশ থেকে বিয়োগ হয়; 'ধার' ধরনের অংশ কারো
@@ -2873,12 +2890,14 @@ function renderMarket(){
         const item = { id:newMarketItemId(), 'নাম':name, 'পরিমাণ':qtyNum, 'দাম':0, 'মোট':0, 'একক':unit, 'কেনা':false };
         marketExpandedItems.add(item.id);
         try{
-          await addMarketItem(activeList['ID'], item);
+          const ok = await addMarketItem(activeList['ID'], item);
           marketAddFormOpen = true;
           renderMarket();
-          toast('তালিকায় যোগ হয়েছে');
-          const el = document.getElementById('marketItemNameInput');
-          if(el) el.focus();
+          if(ok){
+            toast('তালিকায় যোগ হয়েছে');
+            const el = document.getElementById('marketItemNameInput');
+            if(el) el.focus();
+          }
         }catch(err){ toast('যোগ করা যায়নি'); }
       });
     }
