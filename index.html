@@ -369,6 +369,9 @@
   .market-item-grid{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;margin-top:6px;}
   .market-item-grid.collapsed{display:none;}
   .market-item-grid input, .market-item-grid select{padding:6px 6px;font-size:12px;width:100%;}
+  /* গতবারের দাম/মোট শুধু হালকা হিন্ট (placeholder) হিসেবে দেখানো হয় — আসল বসানো মান নয়।
+     এটা যেন কালো টাইপ করা সংখ্যার সাথে গুলিয়ে না যায়, তাই স্পষ্টভাবে হালকা রঙ দেওয়া হলো। */
+  .market-item-grid input::placeholder{color:#a8a196;opacity:1;font-style:italic;}
   .market-item-grid .market-item-total-input{text-align:right;font-weight:600;}
   .market-trend{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;flex:0 0 auto;padding:1px 6px;border-radius:8px;white-space:nowrap;}
   .market-trend.up{color:var(--clay);background:rgba(156,91,74,.12);}
@@ -2516,7 +2519,19 @@ async function addMarketItem(listId, item){
 // দেখানোর দরকার নেই — শুধু "কেনা" হয়েছে কিনা তা টগল হয়
 async function markMarketItemBought(listId, itemId, bought){
   const list = cache.market.find(m=>m['ID']===listId); if(!list) return;
-  const items = (list['আইটেম']||[]).map(it=> it.id===itemId ? {...it, 'কেনা': bought} : it);
+  const items = (list['আইটেম']||[]).map(it=>{
+    if(it.id!==itemId) return it;
+    if(!bought){
+      // টিক তুলে ফেললে দাম/মোট মুছে ফেলা হয় — যেহেতু এবার এটা আসলে কেনা হয়নি, আগের
+      // (হয়তো ভুল করে বসানো বা অন্য দিনের) দামটা রয়ে গেলে পরেরবার আবার টিক দিলে
+      // পুরনো/ভুল মান দিয়ে হিসাব হয়ে যেত। তাই আনচেক করলেই দাম-মোট রিসেট হয়ে ০ হয়ে যাবে।
+      return {...it, 'কেনা': false, 'দাম': 0, 'মোট': 0};
+    }
+    // টিক দেওয়ার সময় দাম না বসিয়ে থাকলে সেটা ০-ই থাকবে (আগের বাজারের দাম আন্দাজ করে
+    // বসানো হবে না) — এতে "কত টাকার বাজার হয়েছে" সংখ্যাটা সবসময় ইউজার নিজে যা টাইপ
+    // করেছেন তার সাথেই মিলবে, কোনো আন্দাজি মান চুপচাপ ঢুকে যাবে না।
+    return {...it, 'কেনা': true};
+  });
   await updateMarketItems(listId, items);
   renderMarket();
 }
@@ -2640,14 +2655,29 @@ function renderMarket(){
         <div class="market-progress-track"><div class="market-progress-fill" style="width:${pct}%;"></div></div>
         <div class="market-progress-lbl"><span>${toBn(t.boughtCount)}/${toBn(t.itemCount)}টি কেনা হয়েছে</span><span>৳${fmtAmt(t.boughtTotal)} খরচ হয়েছে</span></div>
       </div>` : ''}
+      ${(()=>{
+        // "কেনা" টিক দেওয়া অথচ দাম/মোট এখনো ০ এমন আইটেম থাকলে স্পষ্ট সতর্কতা দেখানো —
+        // যাতে সর্বমোট/খরচ হয়েছে চুপচাপ ভুল থেকে গেলেও সেটা চোখ এড়িয়ে না যায়
+        const missing = (activeList['আইটেম']||[]).filter(it=>it['কেনা'] && !itemTotalPrice(it));
+        if(!missing.length) return '';
+        const names = missing.map(it=>(it['নাম']||'').trim()).filter(Boolean).join(', ');
+        return `<div style="margin-top:8px;padding:8px 10px;background:#fdf1ec;border:1px solid #e2a98f;border-radius:8px;font-size:12px;color:#a13d1e;">⚠️ কেনা হয়েছে টিক দেওয়া কিন্তু দাম বসানো হয়নি: ${names} — এগুলোর দাম যোগ না করলে সর্বমোট/খরচ হয়েছে-তে ধরা পড়বে না।</div>`;
+      })()}
       <div style="margin-top:10px;">
         ${items.length? items.map(it=>{
           const name = (it['নাম']||'').trim();
           const stat = itemStats[name];
-          const pricePH = (!it['দাম'] && stat && stat.price) ? `${fmtAmt(stat.price)}` : 'দাম';
+          // "কেনা" টিক দেওয়া থাকলে দাম/মোট ঘরে সবসময় আসল সংখ্যা (এমনকি ০ হলেও) দেখানো
+          // হয় — আন্দাজি "গতবারের" হিন্ট আর দেখানো হয় না, যাতে ধূসর হিন্টকে ভুল করে
+          // আসল বসানো দাম মনে না হয়। টিক না দেওয়া থাকলে আগের মতোই হিন্ট হিসেবে
+          // গতবারের দাম হালকাভাবে দেখানো হবে (নতুন দাম টাইপ করতে সাহায্যের জন্য)।
+          const bought = !!it['কেনা'];
+          const pricePH = (!bought && !it['দাম'] && stat && stat.price) ? `${fmtAmt(stat.price)}` : 'দাম';
           const priceTitle = (stat && stat.price) ? `গতবারের দাম: ৳${fmtAmt(stat.price)}` : '';
-          const totalPH = (!itemTotalPrice(it) && stat && stat.total) ? `${fmtAmt(stat.total)}` : 'মোট';
+          const totalPH = (!bought && !itemTotalPrice(it) && stat && stat.total) ? `${fmtAmt(stat.total)}` : 'মোট';
           const totalTitle = (stat && stat.total) ? `গতবারের মোট: ৳${fmtAmt(stat.total)}` : '';
+          const priceVal = bought ? (it['দাম']||0) : (it['দাম']?it['দাম']:'');
+          const totalVal = bought ? itemTotalPrice(it) : (itemTotalPrice(it)||'');
           let trendHtml = '';
           if(it['দাম'] && stat && stat.price>0 && Number(it['দাম'])!==stat.price){
             const diff = Number(it['দাম']) - stat.price;
@@ -2667,13 +2697,13 @@ function renderMarket(){
               <button class="btn ghost small market-item-del" data-item="${it.id}" style="flex:0 0 auto;">✕</button>
             </div>
             <div class="market-item-grid${expanded?'':' collapsed'}">
-              <input type="number" step="0.01" min="0" class="market-item-price-input" data-item="${it.id}" value="${it['দাম']?it['দাম']:''}" placeholder="${pricePH}" title="${priceTitle}">
+              <input type="number" step="0.01" min="0" class="market-item-price-input" data-item="${it.id}" value="${priceVal}" placeholder="${pricePH}" title="${priceTitle}">
               <input type="number" step="any" min="0" class="market-item-qty-input" data-item="${it.id}" value="${it['পরিমাণ']?it['পরিমাণ']:''}" placeholder="পরিমাণ">
               <select class="market-item-unit-input" data-item="${it.id}">
                 <option value=""></option>
                 ${MARKET_UNITS.map(u=>`<option value="${u}" ${it['একক']===u?'selected':''}>${u}</option>`).join('')}
               </select>
-              <input type="number" step="0.01" min="0" class="market-item-total-input" data-item="${it.id}" value="${itemTotalPrice(it)||''}" placeholder="${totalPH}" title="${totalTitle}">
+              <input type="number" step="0.01" min="0" class="market-item-total-input" data-item="${it.id}" value="${totalVal}" placeholder="${totalPH}" title="${totalTitle}">
             </div>
           </div>`;
         }).join('') : '<div class="empty">এখনো কোনো আইটেম যোগ হয়নি</div>'}
