@@ -798,6 +798,11 @@ let financeHistoryLimit = 30; // হিসাব পেইজের কার্
 let financeHistoryRange = { from:'', to:'' }; // সাম্প্রতিক কার্যক্রম টেবিলে তারিখ ফিল্টার (খালি মানে সব)
 let financeHistoryFilterOpen = false; // ফিল্টার বার খোলা/বন্ধ আছে কিনা
 let testDateOverride = null; // 'YYYY-MM-DD' হলে পুরো অ্যাপ এটাকেই "আজ" ধরে কাজ করবে (শুধু টেস্টের জন্য)
+// api.aladhan.com গাণিতিকভাবে (মূলত সৌদি আরবের Umm al-Qura ক্যালেন্ডারের কাছাকাছি) হিজরি তারিখ
+// হিসাব করে, যেটা বাংলাদেশ ইসলামিক ফাউন্ডেশনের চাঁদ দেখা কমিটির ঘোষণার সাথে প্রায়ই ১ দিন
+// (কখনো কখনো বেশি) আগে-পিছে হয়। এই সমন্বয়টা সেটিংসে ব্যবহারকারী নিজে ঠিক করে দিতে পারবেন,
+// আর সব জায়গায় (হেডারের হিজরি তারিখ, ইসলামিক নোটিশ, বালিগ বয়স হিসাব) এটা যোগ হয়ে হিসাব হবে।
+let hijriAdjustment = 0;
 let finFilter = { cat:'', from:'', to:'', minAmt:'', maxAmt:'', q:'' };
 let ledgerFilter = { name:'', type:'', from:'', to:'', minAmt:'', maxAmt:'' };
 let openFinanceModal = null; // ফিনান্স পেইজের কোন পপআপ খোলা আছে তা মনে রাখে (রি-রেন্ডারের পরও খোলা থাকে)
@@ -3073,7 +3078,7 @@ function daysUntilEvent(evM, evD, curM, curD){
 }
 async function loadIslamicInfo(){
   try{
-    const r = await fetch('https://api.aladhan.com/v1/gToH');
+    const r = await fetch(`https://api.aladhan.com/v1/gToH?adjustment=${hijriAdjustment}`);
     const data = await r.json();
     const h = data.data.hijri;
     hijriInfo = { day: parseInt(h.day), month: parseInt(h.month.number), year: h.year };
@@ -3081,7 +3086,12 @@ async function loadIslamicInfo(){
     let upcoming = [];
     for(let y=0;y<15;y++){
       ISLAMIC_EVENTS.forEach(ev=>{
-        upcoming.push({ title: ev.title, days: daysUntilEvent(ev.month, ev.day, hijriInfo.month, hijriInfo.day) + y*354 });
+        const days = daysUntilEvent(ev.month, ev.day, hijriInfo.month, hijriInfo.day) + y*354;
+        // এই বছরের (y=0) হিসাবে ইভেন্টের দিনটা যদি চলতি হিজরি মাসের মধ্যেই ইতিমধ্যে
+        // পার হয়ে গিয়ে থাকে (যেমন আজ ১৭ রবিউল আউয়াল, ইভেন্ট ১২ রবিউল আউয়াল), তাহলে
+        // days ঋণাত্মক হয়ে যায় — সেটা "এখনো বাকি" হিসেবে দেখানো ভুল, তাই বাদ দেওয়া হচ্ছে।
+        // পরের y-এর (আগামী বছরের) হিসাবটাই আসল "পরবর্তী occurrence" হিসেবে থেকে যাবে।
+        if(days>=0) upcoming.push({ title: ev.title, days });
       });
     }
     upcoming.sort((a,b)=>a.days-b.days);
@@ -3715,7 +3725,7 @@ document.getElementById('qazaStartOption').addEventListener('change', e=>{
 });
 async function gregorianToHijri(dateStr){
   const [y,m,d] = dateStr.split('-');
-  const r = await fetch(`https://api.aladhan.com/v1/gToH?date=${d}-${m}-${y}`);
+  const r = await fetch(`https://api.aladhan.com/v1/gToH?date=${d}-${m}-${y}&adjustment=${hijriAdjustment}`);
   const data = await r.json();
   return data.data.hijri;
 }
@@ -4945,6 +4955,15 @@ function renderSettings(){
     </div>
     ${installCardHtml}
     <div class="card">
+      <h2>🌙 হিজরি তারিখ সমন্বয়</h2>
+      <p style="font-size:13px;color:var(--muted);margin:0 0 6px;">হিজরি তারিখ এখানে গাণিতিকভাবে হিসাব করা হয় (সৌদি আরবের ক্যালেন্ডারের কাছাকাছি), যা বাংলাদেশ ইসলামিক ফাউন্ডেশনের চাঁদ দেখা ঘোষণার সাথে মাঝেমধ্যে ১ দিন আগে-পিছে হতে পারে। বাংলাদেশের ঘোষণার সাথে না মিললে এখান থেকে সমন্বয় করে নিন।</p>
+      <select id="hijriAdjustInput">
+        ${[-2,-1,0,1,2].map(v=>`<option value="${v}" ${hijriAdjustment===v?'selected':''}>${v>0?'+'+toBn(v):toBn(v)} দিন${v===-1?' (প্রস্তাবিত — বাংলাদেশ)':''}</option>`).join('')}
+      </select>
+      <button class="btn small" id="saveHijriAdjust" style="margin-top:8px;">সংরক্ষণ করুন</button>
+      ${hijriInfo? `<div class="status-msg ok">বর্তমান হিজরি তারিখ: ${toBn(hijriInfo.day)} ${HIJRI_MONTHS[hijriInfo.month-1]} ${toBn(hijriInfo.year)}</div>` : ''}
+    </div>
+    <div class="card">
       <h2>🧪 তারিখ টেস্ট করুন</h2>
       <p style="font-size:13px;color:var(--muted);margin:0 0 6px;">আপনার ফোনের আসল তারিখ না বদলিয়ে, অ্যাপ যেন অন্য একটা তারিখকে "আজ" ধরে কাজ করে তা এখানে সেট করতে পারবেন — যেমন মাস বদলালে আয়/খরচ ঠিকমতো ০ থেকে শুরু হয় কিনা যাচাই করতে।</p>
       <input type="date" id="testDateInput" value="${testDateOverride||''}">
@@ -4992,6 +5011,15 @@ service cloud.firestore {
     </div>
   `;
   document.getElementById('settingsAddNoteBtn').addEventListener('click', openAddNoteModal);
+  const saveHijriAdjustBtn = document.getElementById('saveHijriAdjust');
+  if(saveHijriAdjustBtn) saveHijriAdjustBtn.addEventListener('click', async ()=>{
+    const val = Number(document.getElementById('hijriAdjustInput').value)||0;
+    hijriAdjustment = val;
+    await localSet('hijriAdjustment', val);
+    await loadIslamicInfo();
+    if(activeTab==='home') render(); else renderSettings();
+    toast('হিজরি তারিখ সমন্বয় সংরক্ষণ করা হয়েছে');
+  });
   const pwaInstallBtn = document.getElementById('pwaInstallBtn');
   if(pwaInstallBtn){
     pwaInstallBtn.addEventListener('click', async ()=>{
@@ -5047,6 +5075,10 @@ service cloud.firestore {
 /* ---------------- INIT ---------------- */
 (async function init(){
   testDateOverride = await localGet('testDateOverride', null);
+  // Aladhan API গাণিতিকভাবে সৌদি আরবের কাছাকাছি হিজরি তারিখ দেয়, যা বাংলাদেশে বাস্তবে
+  // চাঁদ দেখার চেয়ে সাধারণত ১ দিন এগিয়ে থাকে (বাংলাদেশে চাঁদ সৌদির ১ দিন পরে দেখা যায়) —
+  // তাই ডিফল্ট -১ দিন সমন্বয় রাখা হলো, ব্যবহারকারী প্রয়োজনে সেটিংস থেকে বদলে নিতে পারবেন।
+  hijriAdjustment = await localGet('hijriAdjustment', -1);
   updateHeaderLine();
   await loadConfig();
   prayerTimes = await localGet('prayerTimes', prayerTimes);
