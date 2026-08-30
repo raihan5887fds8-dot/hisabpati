@@ -2565,11 +2565,23 @@ async function quickAddMarketItem(name, qty, price, total, unit){
 // কাছ থেকে ধার নিয়ে সরাসরি পরিশোধ হিসেবে গণ্য হয় (কোনো অ্যাকাউন্ট থেকে টাকা যায় না, বরং সেই ব্যক্তির প্রতি দেনা বাড়ে)।
 async function finalizeMarketList(listId, finalTotal, splits){
   const list = cache.market.find(m=>m['ID']===listId); if(!list) return;
-  const boughtCount = (list['আইটেম']||[]).filter(it=>it['কেনা']).length;
+  const allItems = list['আইটেম']||[];
+  const boughtItems = allItems.filter(it=>it['কেনা']);
+  const unboughtItems = allItems.filter(it=>!it['কেনা']);
+  const boughtCount = boughtItems.length;
   const accountSummary = splits.map(s=> s.type==='account' ? s.account : `ধার (${s.person})`).join(' + ');
-  const patch = { 'অবস্থা':'সম্পন্ন', 'তারিখ_শেষ': todayStr(), 'মোট_খরচ': finalTotal, 'অ্যাকাউন্ট': accountSummary, 'পরিশোধ_বিবরণ': splits };
+  // যেসব আইটেমে টিক দেওয়া হয়নি (কেনা হয়নি), সেগুলো "সম্পন্ন" তালিকায় নিয়ে গেলে
+  // পরের বার বাজারে গেলে আর দেখা যেত না (যেন হারিয়ে গেছে)। তাই শুধু কেনা আইটেমগুলোই
+  // এই তালিকার সাথে "সম্পন্ন" হিসেবে সংরক্ষণ করা হচ্ছে, আর টিক না দেওয়া আইটেমগুলো
+  // একটা নতুন "চলমান" তালিকায় নিয়ে যাওয়া হচ্ছে যাতে সেগুলো তালিকায় থেকেই যায়।
+  const patch = { 'আইটেম': boughtItems, 'অবস্থা':'সম্পন্ন', 'তারিখ_শেষ': todayStr(), 'মোট_খরচ': finalTotal, 'অ্যাকাউন্ট': accountSummary, 'পরিশোধ_বিবরণ': splits };
   await apiPost('বাজার','update', listId, patch);
   Object.assign(list, patch);
+  if(unboughtItems.length){
+    const carryData = { 'তারিখ_শুরু': todayStr(), 'অবস্থা':'চলমান', 'আইটেম': unboughtItems };
+    const carryRes = await apiPost('বাজার','add', null, carryData);
+    cache.market.push({ID: carryRes.id, ...carryData});
+  }
   for(const s of splits){
     const isAccount = s.type==='account';
     const now = new Date();
@@ -2627,7 +2639,7 @@ function renderMarket(){
   const activeList = getActiveMarketList();
   const completedLists = getCompletedMarketLists();
   const itemStats = marketItemStats();
-  const frequentItems = Object.entries(itemStats).sort((a,b)=>b[1].count-a[1].count).slice(0,12);
+  const frequentItems = Object.entries(itemStats).sort((a,b)=>b[1].count-a[1].count);
   const nameOptions = Object.keys(itemStats);
   const monthSpent = marketMonthSpent();
 
