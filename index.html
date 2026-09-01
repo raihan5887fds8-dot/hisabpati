@@ -265,6 +265,29 @@
   table.rt-today-table .badge{font-size:10px;padding:2px 7px;border-radius:8px;background:var(--gold-soft);color:#5a4622;white-space:nowrap;}
   table.rt-today-table .badge.bd{background:rgba(76,122,93,.15);color:var(--sage);}
 
+  /* --- রুটিন ইতিহাস: মাসিক ক্যালেন্ডার গ্রিড --- */
+  .rt-cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-top:2px;}
+  .rt-cal-dow{font-size:10px;color:var(--muted);text-align:center;font-weight:700;padding-bottom:4px;}
+  .rt-cal-cell{
+    aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:3px;border-radius:8px;cursor:pointer;font-size:12px;background:var(--parchment);
+    border:1.5px solid transparent;position:relative;transition:transform .1s;
+  }
+  .rt-cal-cell:active{transform:scale(.93);}
+  .rt-cal-cell.empty{visibility:hidden;cursor:default;}
+  .rt-cal-cell.today{border-color:var(--gold);font-weight:700;}
+  .rt-cal-cell .rt-cal-day{line-height:1;}
+  .rt-cal-cell .rt-cal-dot{width:6px;height:6px;border-radius:50%;background:transparent;}
+  .rt-cal-cell.status-done{background:rgba(76,122,93,.16);}
+  .rt-cal-cell.status-done .rt-cal-dot{background:var(--sage);}
+  .rt-cal-cell.status-missed{background:rgba(156,91,74,.16);}
+  .rt-cal-cell.status-missed .rt-cal-dot{background:var(--clay);}
+  .rt-cal-cell.status-pending .rt-cal-dot{background:var(--gold);}
+  .rt-cal-cell.status-skip .rt-cal-dot{background:var(--muted);}
+  .rt-cal-legend{display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:var(--muted);margin-top:12px;}
+  .rt-cal-legend span{display:inline-flex;align-items:center;gap:5px;}
+  .rt-cal-legend i{width:8px;height:8px;border-radius:50%;display:inline-block;}
+
   .day-group h3{
     font-family:'Tiro Bangla',serif;
     font-size:15px;color:var(--gold);
@@ -848,6 +871,19 @@ function sanitizeSheetRow(obj){
   return obj;
 }
 
+// AlAdhan API-র 'adjustment' প্যারামিটার নিজেই ঠিকমতো কাজ করে না (এটা তাদের দিক থেকে
+// পুরনো, অমীমাংসিত একটা bug — সার্ভার আসলে adjustment উপেক্ষা করে সবসময় একই হিজরি তারিখ
+// ফেরত দেয়)। তাই সমন্বয়টা আমরা নিজেরাই করি: হিজরি তারিখ চাওয়ার আগে ইনপুট গ্রেগরিয়ান
+// তারিখটাকেই hijriAdjustment দিন এগিয়ে/পিছিয়ে দিয়ে পাঠাই — যেহেতু হিজরি আর গ্রেগরিয়ান
+// দিন ১:১ ভাবে এগোয়, এতে ফলাফল ঠিক adjustment প্যারামিটার কাজ করলে যা হতো তার সমান হয়।
+function shiftDateStr(dateStr, days){
+  const d = new Date(dateStr+'T00:00:00');
+  d.setDate(d.getDate()+days);
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const day = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
 function todayStr(d){
   if(!d){
     d = testDateOverride ? new Date(testDateOverride+'T00:00:00') : new Date();
@@ -3078,7 +3114,9 @@ function daysUntilEvent(evM, evD, curM, curD){
 }
 async function loadIslamicInfo(){
   try{
-    const r = await fetch(`https://api.aladhan.com/v1/gToH?adjustment=${hijriAdjustment}`);
+    const shifted = shiftDateStr(todayStr(), hijriAdjustment);
+    const [sy,sm,sd] = shifted.split('-');
+    const r = await fetch(`https://api.aladhan.com/v1/gToH?date=${sd}-${sm}-${sy}`);
     const data = await r.json();
     const h = data.data.hijri;
     hijriInfo = { day: parseInt(h.day), month: parseInt(h.month.number), year: h.year };
@@ -3167,7 +3205,6 @@ function renderPrayer(){
       <div class="islamic-date">${toBn(today.getDate())} ${MONTHS[today.getMonth()]} ${toBn(today.getFullYear())} · ${getBanglaDate(today)}</div>
       <div class="hijri-date">${hijriInfo? '☪ '+toBn(hijriInfo.day)+' '+HIJRI_MONTHS[hijriInfo.month-1]+' '+toBn(hijriInfo.year)+' হিজরি' : 'হিজরি তারিখ লোড হচ্ছে…'}</div>
       ${combinedAmalHtml? `<div class="amal-of-day">${combinedAmalHtml}</div>` : ''}
-      <button class="btn ghost small" id="openCustomAmalBtn" style="margin-top:10px;">📿 আমল সেট করুন</button>
       <h2 style="margin-top:14px;">☪ ইসলামিক নোটিশ</h2>
       ${islamicNoticesHtml.main || '<div class="empty">লোড হচ্ছে…</div>'}
       ${islamicNoticesHtml.more? `<div class="notice-toggle" id="moreToggle">▼ আরো ইসলামিক নোটিশ</div><div class="more-notices" id="moreNotices">${islamicNoticesHtml.more}</div>` : ''}
@@ -3475,10 +3512,6 @@ function renderPrayer(){
     document.getElementById('quranTrackerModal').classList.remove('show');
   });
 
-  document.getElementById('openCustomAmalBtn').addEventListener('click', ()=>{
-    openPrayerModal = 'customAmalModal';
-    document.getElementById('customAmalModal').classList.add('show');
-  });
   document.getElementById('customAmalCloseBtn').addEventListener('click', ()=>{
     openPrayerModal = null;
     document.getElementById('customAmalModal').classList.remove('show');
@@ -3724,8 +3757,9 @@ document.getElementById('qazaStartOption').addEventListener('change', e=>{
   document.getElementById('qazaCustomWrap').style.display = e.target.value==='custom' ? 'block':'none';
 });
 async function gregorianToHijri(dateStr){
-  const [y,m,d] = dateStr.split('-');
-  const r = await fetch(`https://api.aladhan.com/v1/gToH?date=${d}-${m}-${y}&adjustment=${hijriAdjustment}`);
+  const shifted = shiftDateStr(dateStr, hijriAdjustment);
+  const [y,m,d] = shifted.split('-');
+  const r = await fetch(`https://api.aladhan.com/v1/gToH?date=${d}-${m}-${y}`);
   const data = await r.json();
   return data.data.hijri;
 }
@@ -4376,8 +4410,10 @@ function renderRoutineMonthHistory(monthStr){
   const [yStr,mStr] = monthStr.split('-');
   const y = Number(yStr), m = Number(mStr); // m: 1-12
   const dim = new Date(y, m, 0).getDate();
+  const firstDow = new Date(y, m-1, 1).getDay(); // 0 = রবিবার
   const today = todayStr();
-  let sumDone=0, sumTotal=0, rows='';
+  let sumDone=0, sumTotal=0;
+  const cellsHtml = [];
   for(let day=1; day<=dim; day++){
     const dateStr = `${y}-${String(m).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
     const items = getRoutinesForDate(dateStr);
@@ -4391,29 +4427,35 @@ function renderRoutineMonthHistory(monthStr){
     const countable = total - cancelled;
     const isPastOrToday = dateStr <= today;
     if(isPastOrToday){ sumDone += done; sumTotal += countable; }
-    let pill;
-    if(total===0){
-      pill = '<span style="color:var(--muted);">—</span>';
-    }else if(countable===0){
-      pill = '<span class="status-pill skip">বাতিল</span>';
-    }else if(done===countable){
-      pill = `<span class="status-pill done">${toBn(done)}/${toBn(countable)}</span>`;
-    }else if(isPastOrToday){
-      pill = `<span class="status-pill" style="background:rgba(156,91,74,.18);color:var(--clay);">${toBn(done)}/${toBn(countable)}</span>`;
-    }else{
-      pill = `<span class="status-pill" style="background:rgba(122,117,102,.15);color:var(--muted);">${toBn(done)}/${toBn(countable)}</span>`;
-    }
+
+    let statusClass, title;
+    if(total===0){ statusClass='status-none'; title=`${dayName}: কোনো কাজ নেই`; }
+    else if(countable===0){ statusClass='status-skip'; title=`${dayName}: সব বাতিল`; }
+    else if(done===countable){ statusClass='status-done'; title=`${dayName}: সম্পন্ন ${toBn(done)}/${toBn(countable)}`; }
+    else if(isPastOrToday){ statusClass='status-missed'; title=`${dayName}: ${toBn(done)}/${toBn(countable)} সম্পন্ন হয়েছে`; }
+    else{ statusClass='status-pending'; title=`${dayName}: ${toBn(done)}/${toBn(countable)} — এখনো বাকি আছে`; }
+
     const isToday = dateStr===today;
-    rows += `<tr class="rt-month-row" data-date="${dateStr}" style="cursor:pointer;${isToday?'background:rgba(176,141,87,.12);':''}">
-      <td>${toBn(day)} <span style="color:var(--muted);font-size:11px;">${dayName}</span></td>
-      <td style="text-align:right;">${pill}</td>
-    </tr>`;
+    cellsHtml.push(`<div class="rt-cal-cell ${statusClass}${isToday?' today':''}" data-date="${dateStr}" title="${title}">
+      <span class="rt-cal-day">${toBn(day)}</span>
+      ${total>0?'<span class="rt-cal-dot"></span>':''}
+    </div>`);
   }
+  const leadingEmpty = Array.from({length:firstDow}, ()=>'<div class="rt-cal-cell empty"></div>').join('');
+  const dowRow = ['রবি','সোম','মঙ্গল','বুধ','বৃহ','শুক্র','শনি'].map(d=>`<div class="rt-cal-dow">${d}</div>`).join('');
+
   const pct = sumTotal>0 ? Math.round(sumDone/sumTotal*100) : 0;
-  const summaryHtml = `<div style="font-size:13px;color:var(--ink);margin-bottom:10px;font-weight:600;">এই মাসে এখন পর্যন্ত সম্পন্ন: ${toBn(sumDone)}/${toBn(sumTotal)} (${toBn(pct)}%)</div>`;
-  body.innerHTML = summaryHtml + `<table class="rt-today-table"><tbody>${rows}</tbody></table>`;
-  body.querySelectorAll('.rt-month-row').forEach(tr=>{
-    tr.addEventListener('click', ()=>switchToDailyRoutineView(tr.dataset.date));
+  const summaryHtml = `<div style="font-size:13px;color:var(--ink);margin-bottom:10px;font-weight:600;">${MONTHS[m-1]} ${toBn(y)} — এই মাসে এখন পর্যন্ত সম্পন্ন: ${toBn(sumDone)}/${toBn(sumTotal)} (${toBn(pct)}%)</div>`;
+  const legendHtml = `<div class="rt-cal-legend">
+    <span><i style="background:var(--sage);"></i> সম্পন্ন</span>
+    <span><i style="background:var(--clay);"></i> মিসড</span>
+    <span><i style="background:var(--gold);"></i> আসছে</span>
+    <span><i style="background:var(--muted);"></i> বাতিল</span>
+  </div>`;
+
+  body.innerHTML = summaryHtml + `<div class="rt-cal-grid">${dowRow}${leadingEmpty}${cellsHtml.join('')}</div>` + legendHtml;
+  body.querySelectorAll('.rt-cal-cell:not(.empty)').forEach(cell=>{
+    cell.addEventListener('click', ()=>switchToDailyRoutineView(cell.dataset.date));
   });
 }
 
@@ -4953,6 +4995,11 @@ function renderSettings(){
       ${getActiveNotes().length? `<p style="font-size:12px;color:var(--sage);margin:0 0 8px;">এখন ${toBn(getActiveNotes().length)}টি নোট সক্রিয় আছে</p>` : ''}
       <button class="btn full" id="settingsAddNoteBtn">+ নতুন নোট যোগ করুন</button>
     </div>
+    <div class="card">
+      <h2>📿 আমল সেট করুন</h2>
+      <p style="font-size:13px;color:var(--muted);margin:0 0 8px;">নির্দিষ্ট তারিখ বা প্রতি বছরের হিজরি দিনের জন্য কাস্টম আমল সেট করুন — নামাজ পেইজে "আজকের আমল" হিসেবে দেখাবে।</p>
+      <button class="btn full" id="openCustomAmalBtn">📿 আমল সেট করুন</button>
+    </div>
     ${installCardHtml}
     <div class="card">
       <h2>🌙 হিজরি তারিখ সমন্বয়</h2>
@@ -5011,6 +5058,10 @@ service cloud.firestore {
     </div>
   `;
   document.getElementById('settingsAddNoteBtn').addEventListener('click', openAddNoteModal);
+  document.getElementById('openCustomAmalBtn').addEventListener('click', ()=>{
+    openPrayerModal = 'customAmalModal';
+    setTab('prayer');
+  });
   const saveHijriAdjustBtn = document.getElementById('saveHijriAdjust');
   if(saveHijriAdjustBtn) saveHijriAdjustBtn.addEventListener('click', async ()=>{
     const val = Number(document.getElementById('hijriAdjustInput').value)||0;
