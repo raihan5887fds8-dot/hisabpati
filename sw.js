@@ -1,88 +1,76 @@
-// হিসাব-পাতি অ্যাপের সার্ভিস ওয়ার্কার
-// কাজ: (১) অফলাইনে অ্যাপ খোলার ব্যবস্থা করা (২) নামাজের নোটিফিকেশনে ট্যাপ করলে অ্যাপ খোলা/ফোকাস করা
-
-const CACHE_NAME = 'hisheb-pati-v1'; // ফাইল বদলালে ভবিষ্যতে এই নামটা বদলে দিলে পুরনো ক্যাশ ফেলে দিয়ে নতুন করে ডাউনলোড হবে
-const APP_SHELL = [
-  './',
-  './index.html',
-  './manifest.json',
-  './icon-192.png'
+// হিসাবপাতি — অফলাইন সার্ভিস ওয়ার্কার
+// অ্যাপে বড় পরিবর্তন করলে নিচের সংখ্যাটা বাড়িয়ে দিন (v2 → v3), তাহলে নতুন ভার্সন লোড হবে
+const CACHE = 'hisheb-v2';
+const SHELL = ['./', './index.html', './manifest.json', './icon-192.png'];
+// Firebase SDK ও ফন্ট — এগুলো অফলাইনেও লাগে
+const EXTERNAL = [
+  'https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js',
+  'https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js'
 ];
 
-// ইনস্টলের সময় মূল ফাইলগুলো ক্যাশে জমা করে রাখা
-self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      // কোনো একটা ফাইল না পাওয়া গেলেও যেন পুরো install ব্যর্থ না হয়
-      return Promise.all(
-        APP_SHELL.map((url) =>
-          cache.add(url).catch(() => {})
-        )
-      );
-    })
-  );
-  self.skipWaiting();
+self.addEventListener('install', e => {
+  e.waitUntil((async () => {
+    const c = await caches.open(CACHE);
+    await Promise.allSettled(SHELL.map(u => c.add(u)));
+    await Promise.allSettled(EXTERNAL.map(u => c.add(new Request(u, {mode:'cors'}))));
+    self.skipWaiting();
+  })());
 });
 
-// পুরনো ভার্সনের ক্যাশ মুছে ফেলা
-self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(
-        keys
-          .filter((key) => key !== CACHE_NAME)
-          .map((key) => caches.delete(key))
-      )
-    )
-  );
-  self.clients.claim();
+self.addEventListener('activate', e => {
+  e.waitUntil((async () => {
+    const keys = await caches.keys();
+    await Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)));
+    await self.clients.claim();
+  })());
 });
 
-// ফাইল আনার কৌশল:
-// - নিজের অ্যাপের ফাইল (HTML/manifest/icon) হলে: আগে ক্যাশ, না পেলে নেটওয়ার্ক (অফলাইনে কাজ করার জন্য)
-// - বাইরের কিছু (যেমন Firebase, aladhan API) হলে: সরাসরি নেটওয়ার্কে পাঠিয়ে দেওয়া, ক্যাশ না করা
-//   (ডাটা সবসময় সবচেয়ে আপডেটেড থাকা দরকার, তাই এগুলো ক্যাশ করা হয় না)
-self.addEventListener('fetch', (event) => {
-  const req = event.request;
+self.addEventListener('fetch', e => {
+  const req = e.request;
+  if (req.method !== 'GET') return;
   const url = new URL(req.url);
 
-  if (req.method !== 'GET') return; // POST ইত্যাদি (Firestore লেখা) সবসময় নেটওয়ার্কেই যাবে
+  // Firestore-এর নিজস্ব নেটওয়ার্ক কল — ক্যাশ করা যাবে না (SDK নিজেই অফলাইন সামলায়)
+  if (url.hostname.endsWith('googleapis.com') && !url.hostname.startsWith('fonts.')) return;
+  if (url.hostname.endsWith('firebaseio.com')) return;
 
-  const isSameOrigin = url.origin === self.location.origin;
-
-  if (!isSameOrigin) {
-    // বাইরের ডোমেইন (Firebase SDK, Firestore, aladhan API ইত্যাদি) — ক্যাশে হাত না দিয়ে সরাসরি নেটওয়ার্ক
+  // পেজ নেভিগেশন: নেট থাকলে নতুনটা, না থাকলে ক্যাশ থেকে
+  if (req.mode === 'navigate') {
+    e.respondWith((async () => {
+      try {
+        const fresh = await fetch(req);
+        const c = await caches.open(CACHE);
+        c.put('./index.html', fresh.clone());
+        return fresh;
+      } catch (_) {
+        return (await caches.match('./index.html')) || (await caches.match('./'));
+      }
+    })());
     return;
   }
 
-  event.respondWith(
-    caches.match(req).then((cached) => {
-      const network = fetch(req)
-        .then((res) => {
-          // সফলভাবে নতুন কপি পাওয়া গেলে ক্যাশ হালনাগাদ করে রাখা (পরের বার অফলাইনেও কাজে লাগবে)
-          if (res && res.status === 200) {
-            const resClone = res.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(req, resClone));
-          }
-          return res;
-        })
-        .catch(() => cached); // নেটওয়ার্ক না থাকলে ক্যাশ থেকেই দেখানো
-
-      // ক্যাশে থাকলে সাথে সাথে সেটা দেখানো (দ্রুত লোড), না থাকলে নেটওয়ার্কের জন্য অপেক্ষা
-      return cached || network;
-    })
-  );
+  // বাকি সব (ফন্ট, SDK, আইকন): ক্যাশে থাকলে ওটাই, না থাকলে নেট থেকে এনে জমিয়ে রাখো
+  e.respondWith((async () => {
+    const hit = await caches.match(req);
+    if (hit) return hit;
+    try {
+      const res = await fetch(req);
+      if (res && (res.ok || res.type === 'opaque')) {
+        const c = await caches.open(CACHE);
+        c.put(req, res.clone());
+      }
+      return res;
+    } catch (_) {
+      return hit || Response.error();
+    }
+  })());
 });
 
-// নামাজের নোটিফিকেশনে ট্যাপ করলে অ্যাপ খোলা বা আগে থেকে খোলা ট্যাবে ফোকাস করা
-self.addEventListener('notificationclick', (event) => {
-  event.notification.close();
-  event.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      for (const client of clientList) {
-        if ('focus' in client) return client.focus();
-      }
-      if (self.clients.openWindow) return self.clients.openWindow('./');
-    })
-  );
+// নামাজের নোটিফিকেশনে ট্যাপ করলে অ্যাপ খুলবে
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  e.waitUntil(self.clients.matchAll({type:'window', includeUncontrolled:true}).then(list => {
+    if (list.length) return list[0].focus();
+    return self.clients.openWindow('./');
+  }));
 });
